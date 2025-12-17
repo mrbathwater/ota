@@ -1,7 +1,0 @@
-{
-  "version": 2,
-  "full": {
-    "location_ota": "https://github.com/rooted-graphene/ota/releases/download/2025121201/felix-2025121201-44044b8-rootless.zip",
-    "location_csig": "https://github.com/rooted-graphene/ota/releases/download/2025121201/felix-2025121201-44044b8-rootless.zip.csig"
-  }
-}
