@@ -1,7 +1,0 @@
-{
-  "version": 2,
-  "full": {
-    "location_ota": "https://github.com/rooted-graphene/ota/releases/download/2025120401/lynx-2025120401-8e18c11-rootless.zip",
-    "location_csig": "https://github.com/rooted-graphene/ota/releases/download/2025120401/lynx-2025120401-8e18c11-rootless.zip.csig"
-  }
-}
