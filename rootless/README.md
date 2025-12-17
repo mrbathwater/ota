@@ -1,4 +1,4 @@
 Set this URL as OTA server URL in your Custota module.  
 See [chenxiaolong/Custota](https://github.com/chenxiaolong/Custota#usage).
 
-[See here for a list of devices](https://github.com/rooted-graphene/ota/tree/gh-pages/rootless).
+[See here for a list of devices](https://github.com/mrbathwater/ota/tree/gh-pages/rootless).
