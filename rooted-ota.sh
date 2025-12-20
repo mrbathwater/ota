@@ -88,8 +88,6 @@ MSD_VERSION=1.20
 ALTER_INSTALLER_VERSION=2.3
 # renovate: datasource=github-releases packageName=bindhosts/bindhosts versioning=semver-coerced
 BINDHOSTS_VERSION=2.1.0
-# renovate: datasource=github-releases packageName=MuntashirAkon/AppManager versioning=semver-coerced
-APPMANAGER_VERSION=4.0.5
 
 CHENXIAOLONG_PK='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDOe6/tBnO7xZhAWXRj3ApUYgn+XZ0wnQiXM8B7tPgv4'
 GIT_PUSH_RETRIES=10
@@ -360,58 +358,6 @@ class BindhostsModule(Module):
                     modules.zip_extract(z, path, system_fs, output=relative_path)
 EOF
 
-  # Create appmanager module
-  cat > .tmp/my-avbroot-setup/lib/modules/appmanager.py <<'EOF'
-# SPDX-FileCopyrightText: 2024-2025 rooted-graphene
-# SPDX-License-Identifier: GPL-3.0-only
-
-from collections.abc import Iterable
-import logging
-from pathlib import Path, PurePosixPath
-from typing import override
-import zipfile
-
-from lib import modules
-from lib.filesystem import CpioFs, ExtFs
-from lib.modules import Module, ModuleRequirements
-
-
-logger = logging.getLogger(__name__)
-
-
-class AppManagerModule(Module):
-    def __init__(self, zip: Path, sig: Path) -> None:
-        super().__init__()
-        # AppManager doesn't have signature verification
-        self.zip: Path = zip
-
-    @override
-    def requirements(self) -> ModuleRequirements:
-        return ModuleRequirements(
-            boot_images=set(),
-            ext_images={'system'},
-            selinux_patching=False,
-        )
-
-    @override
-    def inject(
-        self,
-        boot_fs: dict[str, CpioFs],
-        ext_fs: dict[str, ExtFs],
-        sepolicies: Iterable[Path],
-    ) -> None:
-        logger.info(f'Injecting AppManager: {self.zip}')
-
-        system_fs = ext_fs['system']
-
-        with zipfile.ZipFile(self.zip, 'r') as z:
-            for path in z.namelist():
-                if path.startswith('system/') and not path.endswith('/'):
-                    # Strip 'system/' prefix since we're already in system partition context
-                    relative_path = path[7:]  # Remove 'system/' (7 chars)
-                    modules.zip_extract(z, path, system_fs, output=relative_path)
-EOF
-
   # Update __init__.py to register the new modules
   cat > .tmp/my-avbroot-setup/lib/modules/__init__.py <<'EOF'
 # SPDX-FileCopyrightText: 2024-2025 Andrew Gunnerson
@@ -521,7 +467,6 @@ def all_modules() -> dict[str, Callable[[Path, Path], Module]]:
     from lib.modules.msd import MSDModule
     from lib.modules.oemunlockonboot import OEMUnlockOnBootModule
     from lib.modules.bindhosts import BindhostsModule
-    from lib.modules.appmanager import AppManagerModule
 
     return {
         'alterinstaller': AlterInstallerModule,
@@ -530,7 +475,6 @@ def all_modules() -> dict[str, Callable[[Path, Path], Module]]:
         'msd': MSDModule,
         'oemunlockonboot': OEMUnlockOnBootModule,
         'bindhosts': BindhostsModule,
-        'appmanager': AppManagerModule,
     }
 EOF
 
@@ -577,16 +521,8 @@ function downloadPrivilegedApps() {
     }
   fi
   
-  # AppManager by MuntashirAkon (APK - needs module creation)
-  if ! ls ".tmp/appmanager-${APPMANAGER_VERSION}.apk" >/dev/null 2>&1; then
-    curl --fail -sL "https://github.com/MuntashirAkon/AppManager/releases/download/v${APPMANAGER_VERSION}/AppManager_v${APPMANAGER_VERSION}.apk" > .tmp/appmanager-${APPMANAGER_VERSION}.apk || {
-      printRed "Failed to download AppManager"
-      return 1
-    }
-  fi
-  
   # Verify all files were downloaded and are non-empty
-  for file in "bcr-${BCR_VERSION}.zip" "msd-${MSD_VERSION}.zip" "alterinstaller-${ALTER_INSTALLER_VERSION}.zip" "bindhosts-${BINDHOSTS_VERSION}.zip" "appmanager-${APPMANAGER_VERSION}.apk"; do
+  for file in "bcr-${BCR_VERSION}.zip" "msd-${MSD_VERSION}.zip" "alterinstaller-${ALTER_INSTALLER_VERSION}.zip" "bindhosts-${BINDHOSTS_VERSION}.zip"; do
     if [[ ! -s ".tmp/$file" ]]; then
       printRed "ERROR: .tmp/$file is missing or empty!"
       return 1
@@ -626,96 +562,16 @@ function createPrivilegedAppModules() {
     printGreen "bindhosts module ready"
   fi
   
-  # Create AppManager module with privileged permissions (only this one needs custom module)
-  if ! ls ".tmp/appmanager-module.zip" >/dev/null 2>&1; then
-    local am_dir=".tmp/appmanager-module"
-    rm -rf "$am_dir"
-    mkdir -p "$am_dir/system/priv-app/AppManager"
-    mkdir -p "$am_dir/system/etc/permissions"
-    
-    # Copy APK
-    cp ".tmp/appmanager-${APPMANAGER_VERSION}.apk" "$am_dir/system/priv-app/AppManager/AppManager.apk"
-    
-    # Create privileged permissions allowlist
-    cat > "$am_dir/system/etc/permissions/privapp-permissions-appmanager.xml" <<'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Privileged permissions for AppManager -->
-<permissions>
-    <privapp-permissions package="io.github.muntashirakon.AppManager">
-        <permission name="android.permission.INSTALL_PACKAGES"/>
-        <permission name="android.permission.DELETE_PACKAGES"/>
-        <permission name="android.permission.CLEAR_APP_USER_DATA"/>
-        <permission name="android.permission.CLEAR_APP_CACHE"/>
-        <permission name="android.permission.FORCE_STOP_PACKAGES"/>
-        <permission name="android.permission.CHANGE_COMPONENT_ENABLED_STATE"/>
-        <permission name="android.permission.GRANT_RUNTIME_PERMISSIONS"/>
-        <permission name="android.permission.REVOKE_RUNTIME_PERMISSIONS"/>
-        <permission name="android.permission.GET_APP_OPS_STATS"/>
-        <permission name="android.permission.MANAGE_APP_OPS_MODES"/>
-        <permission name="android.permission.UPDATE_APP_OPS_STATS"/>
-        <permission name="android.permission.INTERACT_ACROSS_USERS"/>
-        <permission name="android.permission.INTERACT_ACROSS_USERS_FULL"/>
-        <permission name="android.permission.MANAGE_USERS"/>
-        <permission name="android.permission.KILL_UID"/>
-        <permission name="android.permission.REAL_GET_TASKS"/>
-        <permission name="android.permission.START_ANY_ACTIVITY"/>
-        <permission name="android.permission.SUSPEND_APPS"/>
-        <permission name="android.permission.DUMP"/>
-        <permission name="android.permission.WRITE_SECURE_SETTINGS"/>
-        <permission name="android.permission.MANAGE_NETWORK_POLICY"/>
-        <permission name="android.permission.MANAGE_SENSORS"/>
-        <permission name="android.permission.READ_LOGS"/>
-        <permission name="android.permission.BACKUP"/>
-        <permission name="android.permission.DEVICE_POWER"/>
-        <permission name="android.permission.INJECT_EVENTS"/>
-        <permission name="com.android.permission.INSTALL_EXISTING_PACKAGES"/>
-        <permission name="android.permission.ADJUST_RUNTIME_PERMISSIONS_POLICY"/>
-        <permission name="android.permission.UPDATE_DOMAIN_VERIFICATION_USER_SELECTION"/>
-        <permission name="android.permission.CHANGE_OVERLAY_PACKAGES"/>
-        <permission name="android.permission.DELETE_CACHE_FILES"/>
-        <permission name="android.permission.INTERNAL_DELETE_CACHE_FILES"/>
-        <permission name="android.permission.MANAGE_NOTIFICATION_LISTENERS"/>
-        <permission name="android.permission.NETWORK_SETTINGS"/>
-    </privapp-permissions>
-</permissions>
-EOF
-    
-    # Create module.prop
-    cat > "$am_dir/module.prop" <<EOF
-id=appmanager
-name=App Manager
-version=${APPMANAGER_VERSION}
-versionCode=$(echo "$APPMANAGER_VERSION" | tr -d '.')
-author=MuntashirAkon
-description=App Manager - A full-featured package manager and viewer for Android
-EOF
-    
-    # Create customize.sh for SELinux context
-    cat > "$am_dir/customize.sh" <<'EOF'
-#!/system/bin/sh
-# Set proper SELinux contexts
-chcon -R u:object_r:system_file:s0 "$MODPATH/system/priv-app/AppManager"
-chcon -R u:object_r:system_file:s0 "$MODPATH/system/etc/permissions"
-EOF
-    chmod +x "$am_dir/customize.sh"
-    
-    # Package as zip
-    (cd "$am_dir" && zip -r ../appmanager-module.zip .)
-    # Create empty signature file (AppManager doesn't have signature verification)
-    touch ".tmp/appmanager-module.zip.sig"
-    printGreen "AppManager module created with privileged permissions"
-  fi
-  
   # Verify all module files were created and are non-empty
-  for file in "bcr-module.zip" "msd-module.zip" "alterinstaller-module.zip" "bindhosts-module.zip" "appmanager-module.zip"; do
+  for file in "bcr-module.zip" "msd-module.zip" "alterinstaller-module.zip" "bindhosts-module.zip"; do
     if [[ ! -s ".tmp/$file" ]]; then
       printRed "ERROR: .tmp/$file is missing or empty!"
       return 1
     fi
   done
   
-  # Verify all signature files exist (even if empty for bindhosts/appmanager)
-  for file in "bcr-module.zip.sig" "msd-module.zip.sig" "alterinstaller-module.zip.sig" "bindhosts-module.zip.sig" "appmanager-module.zip.sig"; do
+  # Verify all signature files exist (even if empty for bindhosts)
+  for file in "bcr-module.zip.sig" "msd-module.zip.sig" "alterinstaller-module.zip.sig" "bindhosts-module.zip.sig"; do
     if [[ ! -f ".tmp/$file" ]]; then
       printRed "ERROR: .tmp/$file is missing!"
       return 1
@@ -788,7 +644,6 @@ function patchOTAs() {
         args+=("--module-msd" ".tmp/msd-module.zip")
         args+=("--module-alterinstaller" ".tmp/alterinstaller-module.zip")
         args+=("--module-bindhosts" ".tmp/bindhosts-module.zip")
-        args+=("--module-appmanager" ".tmp/appmanager-module.zip")
       fi
       # We create csig and device JSON for OTA later if necessary
       args+=("--skip-custota-tool")

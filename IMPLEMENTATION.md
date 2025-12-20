@@ -1,14 +1,15 @@
-# Complete Solution: All 5 Privileged Apps Embedded in OTA
+# Complete Solution: 4 Privileged Apps Embedded in OTA
 
 ## ✅ Success! All Apps Integrated
 
-This solution successfully embeds **ALL 5 privileged apps** in both Magisk and rootless GrapheneOS OTA builds:
+This solution successfully embeds **4 privileged apps** in both Magisk and rootless GrapheneOS OTA builds:
 
 1. ✅ **BCR (v1.87)** - Basic Call Recorder
 2. ✅ **MSD (v1.20)** - Material Storage Dumper  
 3. ✅ **AlterInstaller (v2.3)** - Alternative Installer
 4. ✅ **bindhosts (v2.1.0)** - Hosts file manager
-5. ✅ **AppManager (v4.0.5)** - Advanced app management with full privileged permissions
+
+**Note**: AppManager was removed from the build due to persistent integration issues. It can be installed manually post-boot via Magisk Manager if needed.
 
 ## How It Works
 
@@ -21,11 +22,11 @@ The `patch.py` script from `chenxiaolong/my-avbroot-setup` only supported 5 hard
 - `msd`
 - `alterinstaller`
 
-It did **NOT** support `bindhosts` or `appmanager`.
+It did **NOT** support `bindhosts`.
 
 ### The Solution
 
-Instead of giving up on integrating bindhosts and AppManager, we **dynamically patch** the cloned `my-avbroot-setup` repository during the build process to add support for these modules!
+Instead of giving up on integrating bindhosts, we **dynamically patch** the cloned `my-avbroot-setup` repository during the build process to add support for this module!
 
 #### Step 1: Clone and Patch (Lines 697-704 in `rooted-ota.sh`)
 
@@ -34,35 +35,30 @@ if ! ls ".tmp/my-avbroot-setup" >/dev/null 2>&1; then
   git clone https://github.com/chenxiaolong/my-avbroot-setup .tmp/my-avbroot-setup
   (cd .tmp/my-avbroot-setup && git checkout ${PATCH_PY_COMMIT})
   
-  # Patch the modules library to add support for bindhosts and appmanager
+  # Patch the modules library to add support for bindhosts
   patchModulesLibrary
 fi
 ```
 
 #### Step 2: Add Module Definitions (function `patchModulesLibrary`)
 
-The `patchModulesLibrary()` function creates three Python files in the cloned repository:
+The `patchModulesLibrary()` function creates two Python files in the cloned repository:
 
 1. **`.tmp/my-avbroot-setup/lib/modules/bindhosts.py`**
    - Python module that knows how to inject bindhosts into the system partition
    - Extracts files from the bindhosts Magisk module ZIP
+   - Strips `system/` prefix to avoid path conflicts
    - Follows the same pattern as BCR, MSD, etc.
 
-2. **`.tmp/my-avbroot-setup/lib/modules/appmanager.py`**
-   - Python module that knows how to inject AppManager into the system partition
-   - Extracts files from our custom AppManager module ZIP
-   - Includes all the privileged permissions and SELinux contexts
-
-3. **`.tmp/my-avbroot-setup/lib/modules/__init__.py`** (patched)
-   - Registers the new modules in the `all_modules()` function
-   - Makes `--module-bindhosts` and `--module-appmanager` flags available
+2. **`.tmp/my-avbroot-setup/lib/modules/__init__.py`** (patched)
+   - Registers the new module in the `all_modules()` function
+   - Makes `--module-bindhosts` flag available
 
 #### Step 3: Download Apps (function `downloadPrivilegedApps`)
 
-Downloads all 5 apps with signature verification where available:
+Downloads all 4 apps with signature verification where available:
 - **BCR, MSD, AlterInstaller**: Downloaded as `.zip` files with SSH signature verification (`.sig` files)
 - **bindhosts**: Downloaded as `.zip` file (no signature available)
-- **AppManager**: Downloaded as `.apk` file (no signature available)
 
 **Error Handling**:
 - Creates `.tmp/` directory before downloading
@@ -73,14 +69,8 @@ Downloads all 5 apps with signature verification where available:
 
 #### Step 4: Prepare Modules (function `createPrivilegedAppModules`)
 
-- **BCR, MSD, AlterInstaller**: Already Magisk modules, rename both `.zip` and `.sig` files
-- **bindhosts**: Rename `.zip` file, create empty `.sig` file (patch.py expects it to exist)
-- **AppManager**: Build custom module with:
-  - APK in `/system/priv-app/AppManager/`
-  - Privileged permissions XML in `/system/etc/permissions/`
-  - SELinux context setup via `customize.sh`
-  - 30+ privileged permissions for full functionality
-  - Create empty `.sig` file for patch.py
+- **BCR, MSD, AlterInstaller, bindhosts**: Already Magisk modules, rename both `.zip` and `.sig` files
+- **Note**: bindhosts gets an empty `.sig` file since it doesn't provide signature verification
 
 **Important**: All modules must have corresponding `.sig` files (even if empty) because `patch.py` checks for their existence.
 
@@ -95,7 +85,6 @@ args+=("--module-bcr" ".tmp/bcr-module.zip")
 args+=("--module-msd" ".tmp/msd-module.zip")
 args+=("--module-alterinstaller" ".tmp/alterinstaller-module.zip")
 args+=("--module-bindhosts" ".tmp/bindhosts-module.zip")      # ✅ NOW WORKS!
-args+=("--module-appmanager" ".tmp/appmanager-module.zip")    # ✅ NOW WORKS!
 ```
 
 ## Technical Details
@@ -108,11 +97,11 @@ args+=("--module-appmanager" ".tmp/appmanager-module.zip")    # ✅ NOW WORKS!
 - Uses chenxiaolong's SSH public key for verification
 - Files must be renamed together: `bcr-1.87.zip` → `bcr-module.zip` AND `bcr-1.87.zip.sig` → `bcr-module.zip.sig`
 
-**Modules without signature verification** (bindhosts, AppManager):
-- Don't download `.sig` files (not provided by authors)
-- Python modules DON'T call `modules.verify_ssh_sig()`
-- Empty `.sig` files created with `touch` to satisfy patch.py's file existence check
-- The empty files are never read or verified
+**Modules without signature verification** (bindhosts):
+- Don't download `.sig` files (not provided by author)
+- Python module DON'T call `modules.verify_ssh_sig()`
+- Empty `.sig` file created with `touch` to satisfy patch.py's file existence check
+- The empty file is never read or verified
 
 **Why empty .sig files?**
 
@@ -147,10 +136,10 @@ class BindhostsModule(Module):
 - Example: `system/priv-app/bindhosts/app.apk` → extracted to `/system/priv-app/bindhosts/app.apk`
 - Preserves file permissions and SELinux contexts
 
-### AppManager Module (`appmanager.py`)
+### bindhosts Module (`bindhosts.py`)
 
 ```python
-class AppManagerModule(Module):
+class BindhostsModule(Module):
     def inject(self, boot_fs, ext_fs, sepolicies):
         system_fs = ext_fs['system']
         with zipfile.ZipFile(self.zip, 'r') as z:
@@ -162,16 +151,12 @@ class AppManagerModule(Module):
 ```
 
 **Key Points**:
-- Extracts our custom-built module containing:
-  - `system/priv-app/AppManager/AppManager.apk`
-  - `system/etc/permissions/privapp-permissions-appmanager.xml`
-- **Strips `system/` prefix** from paths (7 characters) to avoid creating `/system/system/...`
+- Extracts all files from the bindhosts Magisk module
+- **Strips `system/` prefix** from paths (7 characters) because `ext_fs['system']` already represents `/system` root
 - Skips directory entries (`not path.endswith('/')`) - only processes actual files
-- Uses `output=relative_path` parameter to control destination path
-- Example: `system/priv-app/AppManager/AppManager.apk` → extracted to `/system/priv-app/AppManager/AppManager.apk`
-- SELinux contexts applied via module's `customize.sh`
-
-### AppManager Privileged Permissions
+- Uses `output=relative_path` to specify destination without the `system/` prefix
+- Example: `system/priv-app/bindhosts/app.apk` → extracted to `/system/priv-app/bindhosts/app.apk`
+- Preserves file permissions and SELinux contexts
 
 The `privapp-permissions-appmanager.xml` grants 30+ permissions:
 - `INSTALL_PACKAGES` / `DELETE_PACKAGES`
