@@ -52,11 +52,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20 # Make sure to not waste hours when some command does not return 
     steps:
-      - name: Checkout rooted-graphene script repository
+      - name: Checkout OTA repository (this repo with rooted-ota.sh)
         uses: actions/checkout@v4
         with:
-          repository: schnatterer/rooted-graphene
-          ref: ${{ github.event.inputs.rooted-graphene-version || inputs.rooted-graphene-version || 'main' }} 
           fetch-depth: 1 # Efficent checkout, we only need the one ref
       - name: Checkout OTA repository for updating OTA server on GitHub Pages
         uses: actions/checkout@v4

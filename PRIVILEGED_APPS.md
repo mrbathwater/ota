@@ -157,7 +157,15 @@ This will skip both the existing modules (custota, oemunlockonboot) and the new 
 
 ## GitHub Actions Compatibility
 
-The implementation is fully compatible with the existing GitHub Actions workflows. No workflow changes are required as the workflows simply call `rooted-ota.sh`.
+The implementation is fully compatible with the GitHub Actions workflows. The workflows have been updated to use your local repository instead of the original `schnatterer/rooted-graphene` repository, ensuring all your custom changes (including the new privileged apps) are included in the build.
+
+### Workflow Changes
+
+**Updated files:**
+- `.github/workflows/release-single.yaml` - Now checks out your local repository
+- `.github/workflows/create-release.yaml` - Now checks out your local repository
+
+These changes ensure that every build uses your modified `rooted-ota.sh` with all 5 privileged apps integrated.
 
 ## Testing
 

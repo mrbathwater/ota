@@ -15,11 +15,9 @@ jobs:
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
     steps:
-      - name: Checkout rooted-graphene script repository
+      - name: Checkout OTA repository (this repo with rooted-ota.sh)
         uses: actions/checkout@v5
         with:
-          repository: schnatterer/rooted-graphene
-          ref: ${{ github.event.inputs.rooted-graphene-version || inputs.rooted-graphene-version || 'main' }}
           fetch-depth: 1 # Efficent checkout, we only need the one ref
       - name: Set inputs
         # Empty means, use version defined in rooted-ota.sh
