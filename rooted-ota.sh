@@ -308,39 +308,39 @@ function downloadAndVerifyFromChenxiaolong() {
 function downloadPrivilegedApps() {
   print "Downloading privileged apps..."
   
-  # BCR - Basic Call Recorder by chenxiaolong
-  if ! ls ".tmp/bcr-${BCR_VERSION}.apk" >/dev/null 2>&1; then
-    curl --fail -sL "https://github.com/chenxiaolong/BCR/releases/download/v${BCR_VERSION}/BCR-${BCR_VERSION}-release.apk" > .tmp/bcr-${BCR_VERSION}.apk
-    curl --fail -sL "https://github.com/chenxiaolong/BCR/releases/download/v${BCR_VERSION}/BCR-${BCR_VERSION}-release.apk.sig" > .tmp/bcr-${BCR_VERSION}.apk.sig
+  # BCR - Basic Call Recorder by chenxiaolong (already a Magisk module)
+  if ! ls ".tmp/bcr-${BCR_VERSION}.zip" >/dev/null 2>&1; then
+    curl --fail -sL "https://github.com/chenxiaolong/BCR/releases/download/v${BCR_VERSION}/BCR-${BCR_VERSION}-release.zip" > .tmp/bcr-${BCR_VERSION}.zip
+    curl --fail -sL "https://github.com/chenxiaolong/BCR/releases/download/v${BCR_VERSION}/BCR-${BCR_VERSION}-release.zip.sig" > .tmp/bcr-${BCR_VERSION}.zip.sig
     # Verify signature
     ssh-keygen -Y verify -I chenxiaolong -f <(echo "chenxiaolong $CHENXIAOLONG_PK") -n file \
-      -s ".tmp/bcr-${BCR_VERSION}.apk.sig" < ".tmp/bcr-${BCR_VERSION}.apk"
+      -s ".tmp/bcr-${BCR_VERSION}.zip.sig" < ".tmp/bcr-${BCR_VERSION}.zip"
   fi
   
-  # MSD - Material Storage Disk by chenxiaolong
-  if ! ls ".tmp/msd-${MSD_VERSION}.apk" >/dev/null 2>&1; then
-    curl --fail -sL "https://github.com/chenxiaolong/MSD/releases/download/v${MSD_VERSION}/MSD-${MSD_VERSION}-release.apk" > .tmp/msd-${MSD_VERSION}.apk
-    curl --fail -sL "https://github.com/chenxiaolong/MSD/releases/download/v${MSD_VERSION}/MSD-${MSD_VERSION}-release.apk.sig" > .tmp/msd-${MSD_VERSION}.apk.sig
+  # MSD - Material Storage Disk by chenxiaolong (already a Magisk module)
+  if ! ls ".tmp/msd-${MSD_VERSION}.zip" >/dev/null 2>&1; then
+    curl --fail -sL "https://github.com/chenxiaolong/MSD/releases/download/v${MSD_VERSION}/MSD-${MSD_VERSION}-release.zip" > .tmp/msd-${MSD_VERSION}.zip
+    curl --fail -sL "https://github.com/chenxiaolong/MSD/releases/download/v${MSD_VERSION}/MSD-${MSD_VERSION}-release.zip.sig" > .tmp/msd-${MSD_VERSION}.zip.sig
     # Verify signature
     ssh-keygen -Y verify -I chenxiaolong -f <(echo "chenxiaolong $CHENXIAOLONG_PK") -n file \
-      -s ".tmp/msd-${MSD_VERSION}.apk.sig" < ".tmp/msd-${MSD_VERSION}.apk"
+      -s ".tmp/msd-${MSD_VERSION}.zip.sig" < ".tmp/msd-${MSD_VERSION}.zip"
   fi
   
-  # AlterInstaller by chenxiaolong
-  if ! ls ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.apk" >/dev/null 2>&1; then
-    curl --fail -sL "https://github.com/chenxiaolong/AlterInstaller/releases/download/v${ALTER_INSTALLER_VERSION}/AlterInstaller-${ALTER_INSTALLER_VERSION}-release.apk" > .tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.apk
-    curl --fail -sL "https://github.com/chenxiaolong/AlterInstaller/releases/download/v${ALTER_INSTALLER_VERSION}/AlterInstaller-${ALTER_INSTALLER_VERSION}-release.apk.sig" > .tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.apk.sig
+  # AlterInstaller by chenxiaolong (already a Magisk module)
+  if ! ls ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.zip" >/dev/null 2>&1; then
+    curl --fail -sL "https://github.com/chenxiaolong/AlterInstaller/releases/download/v${ALTER_INSTALLER_VERSION}/AlterInstaller-${ALTER_INSTALLER_VERSION}-release.zip" > .tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.zip
+    curl --fail -sL "https://github.com/chenxiaolong/AlterInstaller/releases/download/v${ALTER_INSTALLER_VERSION}/AlterInstaller-${ALTER_INSTALLER_VERSION}-release.zip.sig" > .tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.zip.sig
     # Verify signature
     ssh-keygen -Y verify -I chenxiaolong -f <(echo "chenxiaolong $CHENXIAOLONG_PK") -n file \
-      -s ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.apk.sig" < ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.apk"
+      -s ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.zip.sig" < ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.zip"
   fi
   
-  # bindhosts - Module and app
+  # bindhosts - Module (zip file)
   if ! ls ".tmp/bindhosts-${BINDHOSTS_VERSION}.zip" >/dev/null 2>&1; then
-    curl --fail -sL "https://github.com/bindhosts/bindhosts/releases/download/v${BINDHOSTS_VERSION}/bindhosts-v${BINDHOSTS_VERSION}.zip" > .tmp/bindhosts-${BINDHOSTS_VERSION}.zip
+    curl --fail -sL "https://github.com/bindhosts/bindhosts/releases/download/v${BINDHOSTS_VERSION}/bindhosts.zip" > .tmp/bindhosts-${BINDHOSTS_VERSION}.zip
   fi
   
-  # AppManager by MuntashirAkon
+  # AppManager by MuntashirAkon (APK - needs module creation)
   if ! ls ".tmp/appmanager-${APPMANAGER_VERSION}.apk" >/dev/null 2>&1; then
     curl --fail -sL "https://github.com/MuntashirAkon/AppManager/releases/download/v${APPMANAGER_VERSION}/AppManager_v${APPMANAGER_VERSION}.apk" > .tmp/appmanager-${APPMANAGER_VERSION}.apk
   fi
@@ -349,102 +349,22 @@ function downloadPrivilegedApps() {
 }
 
 function createPrivilegedAppModules() {
-  print "Creating Magisk modules for privileged apps..."
+  print "Preparing Magisk modules for privileged apps..."
   
-  # Create BCR module
+  # BCR, MSD, and AlterInstaller are already Magisk modules, just rename them
   if ! ls ".tmp/bcr-module.zip" >/dev/null 2>&1; then
-    local bcr_dir=".tmp/bcr-module"
-    rm -rf "$bcr_dir"
-    mkdir -p "$bcr_dir/system/priv-app/BCR"
-    
-    # Copy APK
-    cp ".tmp/bcr-${BCR_VERSION}.apk" "$bcr_dir/system/priv-app/BCR/BCR.apk"
-    
-    # Create module.prop
-    cat > "$bcr_dir/module.prop" <<EOF
-id=bcr
-name=BCR (Basic Call Recorder)
-version=${BCR_VERSION}
-versionCode=$(echo "$BCR_VERSION" | tr -d '.')
-author=chenxiaolong
-description=Basic Call Recorder - Records phone calls with support for various audio formats
-EOF
-    
-    # Create customize.sh for SELinux context
-    cat > "$bcr_dir/customize.sh" <<'EOF'
-#!/system/bin/sh
-# Set proper SELinux contexts
-chcon -R u:object_r:system_file:s0 "$MODPATH/system/priv-app/BCR"
-EOF
-    chmod +x "$bcr_dir/customize.sh"
-    
-    # Package as zip
-    (cd "$bcr_dir" && zip -r ../bcr-module.zip .)
-    printGreen "BCR module created"
+    cp ".tmp/bcr-${BCR_VERSION}.zip" ".tmp/bcr-module.zip"
+    printGreen "BCR module ready"
   fi
   
-  # Create MSD module
   if ! ls ".tmp/msd-module.zip" >/dev/null 2>&1; then
-    local msd_dir=".tmp/msd-module"
-    rm -rf "$msd_dir"
-    mkdir -p "$msd_dir/system/priv-app/MSD"
-    
-    # Copy APK
-    cp ".tmp/msd-${MSD_VERSION}.apk" "$msd_dir/system/priv-app/MSD/MSD.apk"
-    
-    # Create module.prop
-    cat > "$msd_dir/module.prop" <<EOF
-id=msd
-name=MSD (Material Storage Disk)
-version=${MSD_VERSION}
-versionCode=$(echo "$MSD_VERSION" | tr -d '.')
-author=chenxiaolong
-description=Material Storage Disk - Advanced storage management for Android
-EOF
-    
-    # Create customize.sh for SELinux context
-    cat > "$msd_dir/customize.sh" <<'EOF'
-#!/system/bin/sh
-# Set proper SELinux contexts
-chcon -R u:object_r:system_file:s0 "$MODPATH/system/priv-app/MSD"
-EOF
-    chmod +x "$msd_dir/customize.sh"
-    
-    # Package as zip
-    (cd "$msd_dir" && zip -r ../msd-module.zip .)
-    printGreen "MSD module created"
+    cp ".tmp/msd-${MSD_VERSION}.zip" ".tmp/msd-module.zip"
+    printGreen "MSD module ready"
   fi
   
-  # Create AlterInstaller module
   if ! ls ".tmp/alterinstaller-module.zip" >/dev/null 2>&1; then
-    local ai_dir=".tmp/alterinstaller-module"
-    rm -rf "$ai_dir"
-    mkdir -p "$ai_dir/system/priv-app/AlterInstaller"
-    
-    # Copy APK
-    cp ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.apk" "$ai_dir/system/priv-app/AlterInstaller/AlterInstaller.apk"
-    
-    # Create module.prop
-    cat > "$ai_dir/module.prop" <<EOF
-id=alterinstaller
-name=AlterInstaller
-version=${ALTER_INSTALLER_VERSION}
-versionCode=$(echo "$ALTER_INSTALLER_VERSION" | tr -d '.')
-author=chenxiaolong
-description=AlterInstaller - Alternative app installer for Android
-EOF
-    
-    # Create customize.sh for SELinux context
-    cat > "$ai_dir/customize.sh" <<'EOF'
-#!/system/bin/sh
-# Set proper SELinux contexts
-chcon -R u:object_r:system_file:s0 "$MODPATH/system/priv-app/AlterInstaller"
-EOF
-    chmod +x "$ai_dir/customize.sh"
-    
-    # Package as zip
-    (cd "$ai_dir" && zip -r ../alterinstaller-module.zip .)
-    printGreen "AlterInstaller module created"
+    cp ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.zip" ".tmp/alterinstaller-module.zip"
+    printGreen "AlterInstaller module ready"
   fi
   
   # bindhosts already comes as a module, just rename it
@@ -453,7 +373,7 @@ EOF
     printGreen "bindhosts module ready"
   fi
   
-  # Create AppManager module with privileged permissions
+  # Create AppManager module with privileged permissions (only this one needs custom module)
   if ! ls ".tmp/appmanager-module.zip" >/dev/null 2>&1; then
     local am_dir=".tmp/appmanager-module"
     rm -rf "$am_dir"
@@ -531,7 +451,7 @@ EOF
     printGreen "AppManager module created with privileged permissions"
   fi
   
-  printGreen "All privileged app modules created successfully"
+  printGreen "All privileged app modules ready"
 }
 
 function patchOTAs() {

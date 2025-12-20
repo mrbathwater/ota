@@ -34,15 +34,21 @@ APPMANAGER_VERSION=4.0.5
 
 ### Download and Verification
 
-Apps from chenxiaolong (BCR, MSD, AlterInstaller) are verified using SSH signature verification with the author's public key.
+**BCR, MSD, and AlterInstaller** are released as **Magisk modules** (`.zip` files) and are verified using SSH signature verification with chenxiaolong's public key.
+
+**bindhosts** is released as a Magisk module (`.zip` file).
+
+**AppManager** is released as an APK file and requires custom module creation with privileged permissions.
 
 ### Module Structure
 
-Each app is packaged as a Magisk module with:
+**BCR, MSD, AlterInstaller, and bindhosts** are already provided as complete Magisk modules by their authors, so they are used as-is.
+
+**AppManager** requires a custom module to be created with:
 - `module.prop` - Module metadata
-- `system/priv-app/AppName/AppName.apk` - The app APK
+- `system/priv-app/AppManager/AppManager.apk` - The app APK
+- `system/etc/permissions/privapp-permissions-appmanager.xml` - Privileged permissions allowlist (30+ permissions)
 - `customize.sh` - SELinux context setup script
-- For AppManager: `system/etc/permissions/privapp-permissions-appmanager.xml` - Privileged permissions allowlist
 
 ## App Descriptions
 
@@ -142,9 +148,9 @@ chcon -R u:object_r:system_file:s0 "$MODPATH/system/etc/permissions"
 
 The apps are integrated into the build process via three main functions in `rooted-ota.sh`:
 
-1. **`downloadPrivilegedApps()`** - Downloads all APKs and modules with signature verification
-2. **`createPrivilegedAppModules()`** - Creates Magisk module structures for each app
-3. **`patchOTAs()`** - Integrates modules into the OTA patching process using avbroot's `--module` flag
+1. **`downloadPrivilegedApps()`** - Downloads all modules (.zip) and AppManager APK with signature verification for chenxiaolong apps
+2. **`createPrivilegedAppModules()`** - Renames pre-built modules (BCR, MSD, AlterInstaller, bindhosts) and creates a custom module for AppManager
+3. **`patchOTAs()`** - Integrates all modules into the OTA patching process using avbroot's `--module` flag
 
 ## Skipping Modules
 
