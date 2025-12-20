@@ -510,11 +510,11 @@ function patchOTAs() {
         args+=("--module-custota" ".tmp/custota.zip")
         args+=("--module-oemunlockonboot" ".tmp/oemunlockonboot.zip")
         # New privileged apps
-        args+=("--module" ".tmp/bcr-module.zip")
-        args+=("--module" ".tmp/msd-module.zip")
-        args+=("--module" ".tmp/alterinstaller-module.zip")
-        args+=("--module" ".tmp/bindhosts-module.zip")
-        args+=("--module" ".tmp/appmanager-module.zip")
+        args+=("--module-bcr" ".tmp/bcr-module.zip")
+        args+=("--module-msd" ".tmp/msd-module.zip")
+        args+=("--module-alterinstaller" ".tmp/alterinstaller-module.zip")
+        args+=("--module-bindhosts" ".tmp/bindhosts-module.zip")
+        args+=("--module-appmanager" ".tmp/appmanager-module.zip")
       fi
       # We create csig and device JSON for OTA later if necessary
       args+=("--skip-custota-tool")
