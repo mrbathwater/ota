@@ -579,25 +579,30 @@ function downloadPrivilegedApps() {
 function createPrivilegedAppModules() {
   print "Preparing Magisk modules for privileged apps..."
   
-  # BCR, MSD, and AlterInstaller are already Magisk modules, just rename them
+  # BCR, MSD, and AlterInstaller are already Magisk modules, just rename them (and their signatures)
   if ! ls ".tmp/bcr-module.zip" >/dev/null 2>&1; then
     cp ".tmp/bcr-${BCR_VERSION}.zip" ".tmp/bcr-module.zip"
+    cp ".tmp/bcr-${BCR_VERSION}.zip.sig" ".tmp/bcr-module.zip.sig"
     printGreen "BCR module ready"
   fi
   
   if ! ls ".tmp/msd-module.zip" >/dev/null 2>&1; then
     cp ".tmp/msd-${MSD_VERSION}.zip" ".tmp/msd-module.zip"
+    cp ".tmp/msd-${MSD_VERSION}.zip.sig" ".tmp/msd-module.zip.sig"
     printGreen "MSD module ready"
   fi
   
   if ! ls ".tmp/alterinstaller-module.zip" >/dev/null 2>&1; then
     cp ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.zip" ".tmp/alterinstaller-module.zip"
+    cp ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.zip.sig" ".tmp/alterinstaller-module.zip.sig"
     printGreen "AlterInstaller module ready"
   fi
   
-  # bindhosts already comes as a module, just rename it
+  # bindhosts doesn't have signature verification, just rename the module
   if ! ls ".tmp/bindhosts-module.zip" >/dev/null 2>&1; then
     cp ".tmp/bindhosts-${BINDHOSTS_VERSION}.zip" ".tmp/bindhosts-module.zip"
+    # Create empty signature file to satisfy patch.py (bindhosts doesn't verify signatures)
+    touch ".tmp/bindhosts-module.zip.sig"
     printGreen "bindhosts module ready"
   fi
   
@@ -676,6 +681,8 @@ EOF
     
     # Package as zip
     (cd "$am_dir" && zip -r ../appmanager-module.zip .)
+    # Create empty signature file (AppManager doesn't have signature verification)
+    touch ".tmp/appmanager-module.zip.sig"
     printGreen "AppManager module created with privileged permissions"
   fi
   

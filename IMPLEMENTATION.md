@@ -60,18 +60,22 @@ The `patchModulesLibrary()` function creates three Python files in the cloned re
 #### Step 3: Download Apps (function `downloadPrivilegedApps`)
 
 Downloads all 5 apps with signature verification where available:
-- BCR, MSD, AlterInstaller: Downloaded as `.zip` files with SSH signature verification
-- bindhosts: Downloaded as `.zip` file (no signature)
-- AppManager: Downloaded as `.apk` file (no signature)
+- **BCR, MSD, AlterInstaller**: Downloaded as `.zip` files with SSH signature verification (`.sig` files)
+- **bindhosts**: Downloaded as `.zip` file (no signature available)
+- **AppManager**: Downloaded as `.apk` file (no signature available)
 
 #### Step 4: Prepare Modules (function `createPrivilegedAppModules`)
 
-- **BCR, MSD, AlterInstaller, bindhosts**: Already Magisk modules, just rename them
+- **BCR, MSD, AlterInstaller**: Already Magisk modules, rename both `.zip` and `.sig` files
+- **bindhosts**: Rename `.zip` file, create empty `.sig` file (patch.py expects it to exist)
 - **AppManager**: Build custom module with:
   - APK in `/system/priv-app/AppManager/`
   - Privileged permissions XML in `/system/etc/permissions/`
   - SELinux context setup via `customize.sh`
   - 30+ privileged permissions for full functionality
+  - Create empty `.sig` file for patch.py
+
+**Important**: All modules must have corresponding `.sig` files (even if empty) because `patch.py` checks for their existence.
 
 #### Step 5: Inject into OTA (function `patchOTAs`)
 
@@ -88,6 +92,31 @@ args+=("--module-appmanager" ".tmp/appmanager-module.zip")    # ✅ NOW WORKS!
 ```
 
 ## Technical Details
+
+### Signature File Handling
+
+**Modules with signature verification** (BCR, MSD, AlterInstaller):
+- Download both `.zip` and `.sig` files from GitHub releases
+- Python modules call `modules.verify_ssh_sig()` to verify authenticity
+- Uses chenxiaolong's SSH public key for verification
+- Files must be renamed together: `bcr-1.87.zip` → `bcr-module.zip` AND `bcr-1.87.zip.sig` → `bcr-module.zip.sig`
+
+**Modules without signature verification** (bindhosts, AppManager):
+- Don't download `.sig` files (not provided by authors)
+- Python modules DON'T call `modules.verify_ssh_sig()`
+- Empty `.sig` files created with `touch` to satisfy patch.py's file existence check
+- The empty files are never read or verified
+
+**Why empty .sig files?**
+
+The `patch.py` script checks if signature files exist:
+```python
+sig_path: Path | None = getattr(args, f'module_{name}_sig')
+if zip_path is None or sig_path is None:
+    continue  # Skip this module
+```
+
+It defaults to `{module}.zip.sig` if not explicitly provided. The file must exist on disk or Python will raise `FileNotFoundError`, even if the module doesn't actually verify it.
 
 ### bindhosts Module (`bindhosts.py`)
 
@@ -274,6 +303,27 @@ adb shell dumpsys package io.github.muntashirakon.AppManager | grep permission
 
 ## Troubleshooting
 
+### Signature file not found error
+
+**Error**: `Couldn't read signature file: No such file or directory`
+
+**Cause**: Module `.zip` files were renamed but their `.sig` files weren't.
+
+**Solution**: The `createPrivilegedAppModules()` function now:
+1. Copies both `.zip` and `.sig` files for BCR, MSD, AlterInstaller
+2. Creates empty `.sig` files for bindhosts and AppManager (they don't verify signatures)
+
+**Verification**:
+```bash
+ls -la .tmp/*.sig
+# Should see:
+# bcr-module.zip.sig
+# msd-module.zip.sig
+# alterinstaller-module.zip.sig
+# bindhosts-module.zip.sig (empty)
+# appmanager-module.zip.sig (empty)
+```
+
 ### Module not recognized error
 
 If you see `patch.py: error: unrecognized arguments: --module-bindhosts`, it means the patching didn't work. Check:
@@ -283,6 +333,7 @@ If you see `patch.py: error: unrecognized arguments: --module-bindhosts`, it mea
 3. The files were created:
    - `.tmp/my-avbroot-setup/lib/modules/bindhosts.py`
    - `.tmp/my-avbroot-setup/lib/modules/appmanager.py`
+   - `.tmp/my-avbroot-setup/lib/modules/__init__.py` (updated)
 
 ### Download failures
 
