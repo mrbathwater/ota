@@ -64,6 +64,13 @@ Downloads all 5 apps with signature verification where available:
 - **bindhosts**: Downloaded as `.zip` file (no signature available)
 - **AppManager**: Downloaded as `.apk` file (no signature available)
 
+**Error Handling**:
+- Creates `.tmp/` directory before downloading
+- Uses `curl --fail` to return error on HTTP failures
+- Validates all downloaded files are non-empty using `[[ -s file ]]`
+- Fails fast with clear error messages if any download fails or files are empty
+- Returns non-zero exit code to stop the build process on errors
+
 #### Step 4: Prepare Modules (function `createPrivilegedAppModules`)
 
 - **BCR, MSD, AlterInstaller**: Already Magisk modules, rename both `.zip` and `.sig` files
@@ -302,6 +309,35 @@ adb shell dumpsys package io.github.muntashirakon.AppManager | grep permission
 - **Advantage**: Fully automated in CI/CD
 
 ## Troubleshooting
+
+### Missing or empty module files error
+
+**Error**: `ERROR: .tmp/appmanager-module.zip is missing or empty!`
+
+**Cause**: Download failed or module creation failed without proper error handling.
+
+**Solution**: Added comprehensive validation:
+
+1. **In `downloadPrivilegedApps()`**:
+   - Creates `.tmp/` directory before downloads
+   - Validates all files after download with `[[ -s file ]]` (checks file exists and is non-empty)
+   - Fails immediately if any file is missing or empty
+
+2. **In `createPrivilegedAppModules()`**:
+   - Validates all module `.zip` files are non-empty
+   - Validates all `.sig` files exist (even empty ones)
+   - Fails with clear error message if validation fails
+
+**Debug**:
+```bash
+# Check what files exist in .tmp/
+ls -lh .tmp/*.{zip,apk,sig}
+
+# Check if files have content
+for f in .tmp/*.zip .tmp/*.apk; do
+  echo "$f: $(wc -c < "$f") bytes"
+done
+```
 
 ### Signature file not found error
 

@@ -536,6 +536,8 @@ EOF
 function downloadPrivilegedApps() {
   print "Downloading privileged apps..."
   
+  mkdir -p .tmp
+  
   # BCR - Basic Call Recorder by chenxiaolong (already a Magisk module)
   if ! ls ".tmp/bcr-${BCR_VERSION}.zip" >/dev/null 2>&1; then
     curl --fail -sL "https://github.com/chenxiaolong/BCR/releases/download/v${BCR_VERSION}/BCR-${BCR_VERSION}-release.zip" > .tmp/bcr-${BCR_VERSION}.zip
@@ -565,13 +567,27 @@ function downloadPrivilegedApps() {
   
   # bindhosts - Module (zip file)
   if ! ls ".tmp/bindhosts-${BINDHOSTS_VERSION}.zip" >/dev/null 2>&1; then
-    curl --fail -sL "https://github.com/bindhosts/bindhosts/releases/download/v${BINDHOSTS_VERSION}/bindhosts.zip" > .tmp/bindhosts-${BINDHOSTS_VERSION}.zip
+    curl --fail -sL "https://github.com/bindhosts/bindhosts/releases/download/v${BINDHOSTS_VERSION}/bindhosts.zip" > .tmp/bindhosts-${BINDHOSTS_VERSION}.zip || {
+      printRed "Failed to download bindhosts"
+      return 1
+    }
   fi
   
   # AppManager by MuntashirAkon (APK - needs module creation)
   if ! ls ".tmp/appmanager-${APPMANAGER_VERSION}.apk" >/dev/null 2>&1; then
-    curl --fail -sL "https://github.com/MuntashirAkon/AppManager/releases/download/v${APPMANAGER_VERSION}/AppManager_v${APPMANAGER_VERSION}.apk" > .tmp/appmanager-${APPMANAGER_VERSION}.apk
+    curl --fail -sL "https://github.com/MuntashirAkon/AppManager/releases/download/v${APPMANAGER_VERSION}/AppManager_v${APPMANAGER_VERSION}.apk" > .tmp/appmanager-${APPMANAGER_VERSION}.apk || {
+      printRed "Failed to download AppManager"
+      return 1
+    }
   fi
+  
+  # Verify all files were downloaded and are non-empty
+  for file in "bcr-${BCR_VERSION}.zip" "msd-${MSD_VERSION}.zip" "alterinstaller-${ALTER_INSTALLER_VERSION}.zip" "bindhosts-${BINDHOSTS_VERSION}.zip" "appmanager-${APPMANAGER_VERSION}.apk"; do
+    if [[ ! -s ".tmp/$file" ]]; then
+      printRed "ERROR: .tmp/$file is missing or empty!"
+      return 1
+    fi
+  done
   
   printGreen "Privileged apps downloaded successfully"
 }
@@ -685,6 +701,22 @@ EOF
     touch ".tmp/appmanager-module.zip.sig"
     printGreen "AppManager module created with privileged permissions"
   fi
+  
+  # Verify all module files were created and are non-empty
+  for file in "bcr-module.zip" "msd-module.zip" "alterinstaller-module.zip" "bindhosts-module.zip" "appmanager-module.zip"; do
+    if [[ ! -s ".tmp/$file" ]]; then
+      printRed "ERROR: .tmp/$file is missing or empty!"
+      return 1
+    fi
+  done
+  
+  # Verify all signature files exist (even if empty for bindhosts/appmanager)
+  for file in "bcr-module.zip.sig" "msd-module.zip.sig" "alterinstaller-module.zip.sig" "bindhosts-module.zip.sig" "appmanager-module.zip.sig"; do
+    if [[ ! -f ".tmp/$file" ]]; then
+      printRed "ERROR: .tmp/$file is missing!"
+      return 1
+    fi
+  done
   
   printGreen "All privileged app modules ready"
 }
