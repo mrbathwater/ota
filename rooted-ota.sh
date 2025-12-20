@@ -79,6 +79,18 @@ OEMUNLOCKONBOOT_VERSION=1.3
 # renovate: datasource=github-releases packageName=chenxiaolong/afsr versioning=semver
 AFSR_VERSION=1.0.4
 
+# New privileged apps
+# renovate: datasource=github-releases packageName=chenxiaolong/BCR versioning=semver-coerced
+BCR_VERSION=1.87
+# renovate: datasource=github-releases packageName=chenxiaolong/MSD versioning=semver-coerced
+MSD_VERSION=1.20
+# renovate: datasource=github-releases packageName=chenxiaolong/AlterInstaller versioning=semver-coerced
+ALTER_INSTALLER_VERSION=2.3
+# renovate: datasource=github-releases packageName=bindhosts/bindhosts versioning=semver-coerced
+BINDHOSTS_VERSION=2.1.0
+# renovate: datasource=github-releases packageName=MuntashirAkon/AppManager versioning=semver-coerced
+APPMANAGER_VERSION=4.0.5
+
 CHENXIAOLONG_PK='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDOe6/tBnO7xZhAWXRj3ApUYgn+XZ0wnQiXM8B7tPgv4'
 GIT_PUSH_RETRIES=10
 
@@ -293,6 +305,235 @@ function downloadAndVerifyFromChenxiaolong() {
   fi
 }
 
+function downloadPrivilegedApps() {
+  print "Downloading privileged apps..."
+  
+  # BCR - Basic Call Recorder by chenxiaolong
+  if ! ls ".tmp/bcr-${BCR_VERSION}.apk" >/dev/null 2>&1; then
+    curl --fail -sL "https://github.com/chenxiaolong/BCR/releases/download/v${BCR_VERSION}/BCR-${BCR_VERSION}-release.apk" > .tmp/bcr-${BCR_VERSION}.apk
+    curl --fail -sL "https://github.com/chenxiaolong/BCR/releases/download/v${BCR_VERSION}/BCR-${BCR_VERSION}-release.apk.sig" > .tmp/bcr-${BCR_VERSION}.apk.sig
+    # Verify signature
+    ssh-keygen -Y verify -I chenxiaolong -f <(echo "chenxiaolong $CHENXIAOLONG_PK") -n file \
+      -s ".tmp/bcr-${BCR_VERSION}.apk.sig" < ".tmp/bcr-${BCR_VERSION}.apk"
+  fi
+  
+  # MSD - Material Storage Disk by chenxiaolong
+  if ! ls ".tmp/msd-${MSD_VERSION}.apk" >/dev/null 2>&1; then
+    curl --fail -sL "https://github.com/chenxiaolong/MSD/releases/download/v${MSD_VERSION}/MSD-${MSD_VERSION}-release.apk" > .tmp/msd-${MSD_VERSION}.apk
+    curl --fail -sL "https://github.com/chenxiaolong/MSD/releases/download/v${MSD_VERSION}/MSD-${MSD_VERSION}-release.apk.sig" > .tmp/msd-${MSD_VERSION}.apk.sig
+    # Verify signature
+    ssh-keygen -Y verify -I chenxiaolong -f <(echo "chenxiaolong $CHENXIAOLONG_PK") -n file \
+      -s ".tmp/msd-${MSD_VERSION}.apk.sig" < ".tmp/msd-${MSD_VERSION}.apk"
+  fi
+  
+  # AlterInstaller by chenxiaolong
+  if ! ls ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.apk" >/dev/null 2>&1; then
+    curl --fail -sL "https://github.com/chenxiaolong/AlterInstaller/releases/download/v${ALTER_INSTALLER_VERSION}/AlterInstaller-${ALTER_INSTALLER_VERSION}-release.apk" > .tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.apk
+    curl --fail -sL "https://github.com/chenxiaolong/AlterInstaller/releases/download/v${ALTER_INSTALLER_VERSION}/AlterInstaller-${ALTER_INSTALLER_VERSION}-release.apk.sig" > .tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.apk.sig
+    # Verify signature
+    ssh-keygen -Y verify -I chenxiaolong -f <(echo "chenxiaolong $CHENXIAOLONG_PK") -n file \
+      -s ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.apk.sig" < ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.apk"
+  fi
+  
+  # bindhosts - Module and app
+  if ! ls ".tmp/bindhosts-${BINDHOSTS_VERSION}.zip" >/dev/null 2>&1; then
+    curl --fail -sL "https://github.com/bindhosts/bindhosts/releases/download/v${BINDHOSTS_VERSION}/bindhosts-v${BINDHOSTS_VERSION}.zip" > .tmp/bindhosts-${BINDHOSTS_VERSION}.zip
+  fi
+  
+  # AppManager by MuntashirAkon
+  if ! ls ".tmp/appmanager-${APPMANAGER_VERSION}.apk" >/dev/null 2>&1; then
+    curl --fail -sL "https://github.com/MuntashirAkon/AppManager/releases/download/v${APPMANAGER_VERSION}/AppManager_v${APPMANAGER_VERSION}.apk" > .tmp/appmanager-${APPMANAGER_VERSION}.apk
+  fi
+  
+  printGreen "Privileged apps downloaded successfully"
+}
+
+function createPrivilegedAppModules() {
+  print "Creating Magisk modules for privileged apps..."
+  
+  # Create BCR module
+  if ! ls ".tmp/bcr-module.zip" >/dev/null 2>&1; then
+    local bcr_dir=".tmp/bcr-module"
+    rm -rf "$bcr_dir"
+    mkdir -p "$bcr_dir/system/priv-app/BCR"
+    
+    # Copy APK
+    cp ".tmp/bcr-${BCR_VERSION}.apk" "$bcr_dir/system/priv-app/BCR/BCR.apk"
+    
+    # Create module.prop
+    cat > "$bcr_dir/module.prop" <<EOF
+id=bcr
+name=BCR (Basic Call Recorder)
+version=${BCR_VERSION}
+versionCode=$(echo "$BCR_VERSION" | tr -d '.')
+author=chenxiaolong
+description=Basic Call Recorder - Records phone calls with support for various audio formats
+EOF
+    
+    # Create customize.sh for SELinux context
+    cat > "$bcr_dir/customize.sh" <<'EOF'
+#!/system/bin/sh
+# Set proper SELinux contexts
+chcon -R u:object_r:system_file:s0 "$MODPATH/system/priv-app/BCR"
+EOF
+    chmod +x "$bcr_dir/customize.sh"
+    
+    # Package as zip
+    (cd "$bcr_dir" && zip -r ../bcr-module.zip .)
+    printGreen "BCR module created"
+  fi
+  
+  # Create MSD module
+  if ! ls ".tmp/msd-module.zip" >/dev/null 2>&1; then
+    local msd_dir=".tmp/msd-module"
+    rm -rf "$msd_dir"
+    mkdir -p "$msd_dir/system/priv-app/MSD"
+    
+    # Copy APK
+    cp ".tmp/msd-${MSD_VERSION}.apk" "$msd_dir/system/priv-app/MSD/MSD.apk"
+    
+    # Create module.prop
+    cat > "$msd_dir/module.prop" <<EOF
+id=msd
+name=MSD (Material Storage Disk)
+version=${MSD_VERSION}
+versionCode=$(echo "$MSD_VERSION" | tr -d '.')
+author=chenxiaolong
+description=Material Storage Disk - Advanced storage management for Android
+EOF
+    
+    # Create customize.sh for SELinux context
+    cat > "$msd_dir/customize.sh" <<'EOF'
+#!/system/bin/sh
+# Set proper SELinux contexts
+chcon -R u:object_r:system_file:s0 "$MODPATH/system/priv-app/MSD"
+EOF
+    chmod +x "$msd_dir/customize.sh"
+    
+    # Package as zip
+    (cd "$msd_dir" && zip -r ../msd-module.zip .)
+    printGreen "MSD module created"
+  fi
+  
+  # Create AlterInstaller module
+  if ! ls ".tmp/alterinstaller-module.zip" >/dev/null 2>&1; then
+    local ai_dir=".tmp/alterinstaller-module"
+    rm -rf "$ai_dir"
+    mkdir -p "$ai_dir/system/priv-app/AlterInstaller"
+    
+    # Copy APK
+    cp ".tmp/alterinstaller-${ALTER_INSTALLER_VERSION}.apk" "$ai_dir/system/priv-app/AlterInstaller/AlterInstaller.apk"
+    
+    # Create module.prop
+    cat > "$ai_dir/module.prop" <<EOF
+id=alterinstaller
+name=AlterInstaller
+version=${ALTER_INSTALLER_VERSION}
+versionCode=$(echo "$ALTER_INSTALLER_VERSION" | tr -d '.')
+author=chenxiaolong
+description=AlterInstaller - Alternative app installer for Android
+EOF
+    
+    # Create customize.sh for SELinux context
+    cat > "$ai_dir/customize.sh" <<'EOF'
+#!/system/bin/sh
+# Set proper SELinux contexts
+chcon -R u:object_r:system_file:s0 "$MODPATH/system/priv-app/AlterInstaller"
+EOF
+    chmod +x "$ai_dir/customize.sh"
+    
+    # Package as zip
+    (cd "$ai_dir" && zip -r ../alterinstaller-module.zip .)
+    printGreen "AlterInstaller module created"
+  fi
+  
+  # bindhosts already comes as a module, just rename it
+  if ! ls ".tmp/bindhosts-module.zip" >/dev/null 2>&1; then
+    cp ".tmp/bindhosts-${BINDHOSTS_VERSION}.zip" ".tmp/bindhosts-module.zip"
+    printGreen "bindhosts module ready"
+  fi
+  
+  # Create AppManager module with privileged permissions
+  if ! ls ".tmp/appmanager-module.zip" >/dev/null 2>&1; then
+    local am_dir=".tmp/appmanager-module"
+    rm -rf "$am_dir"
+    mkdir -p "$am_dir/system/priv-app/AppManager"
+    mkdir -p "$am_dir/system/etc/permissions"
+    
+    # Copy APK
+    cp ".tmp/appmanager-${APPMANAGER_VERSION}.apk" "$am_dir/system/priv-app/AppManager/AppManager.apk"
+    
+    # Create privileged permissions allowlist
+    cat > "$am_dir/system/etc/permissions/privapp-permissions-appmanager.xml" <<'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Privileged permissions for AppManager -->
+<permissions>
+    <privapp-permissions package="io.github.muntashirakon.AppManager">
+        <permission name="android.permission.INSTALL_PACKAGES"/>
+        <permission name="android.permission.DELETE_PACKAGES"/>
+        <permission name="android.permission.CLEAR_APP_USER_DATA"/>
+        <permission name="android.permission.CLEAR_APP_CACHE"/>
+        <permission name="android.permission.FORCE_STOP_PACKAGES"/>
+        <permission name="android.permission.CHANGE_COMPONENT_ENABLED_STATE"/>
+        <permission name="android.permission.GRANT_RUNTIME_PERMISSIONS"/>
+        <permission name="android.permission.REVOKE_RUNTIME_PERMISSIONS"/>
+        <permission name="android.permission.GET_APP_OPS_STATS"/>
+        <permission name="android.permission.MANAGE_APP_OPS_MODES"/>
+        <permission name="android.permission.UPDATE_APP_OPS_STATS"/>
+        <permission name="android.permission.INTERACT_ACROSS_USERS"/>
+        <permission name="android.permission.INTERACT_ACROSS_USERS_FULL"/>
+        <permission name="android.permission.MANAGE_USERS"/>
+        <permission name="android.permission.KILL_UID"/>
+        <permission name="android.permission.REAL_GET_TASKS"/>
+        <permission name="android.permission.START_ANY_ACTIVITY"/>
+        <permission name="android.permission.SUSPEND_APPS"/>
+        <permission name="android.permission.DUMP"/>
+        <permission name="android.permission.WRITE_SECURE_SETTINGS"/>
+        <permission name="android.permission.MANAGE_NETWORK_POLICY"/>
+        <permission name="android.permission.MANAGE_SENSORS"/>
+        <permission name="android.permission.READ_LOGS"/>
+        <permission name="android.permission.BACKUP"/>
+        <permission name="android.permission.DEVICE_POWER"/>
+        <permission name="android.permission.INJECT_EVENTS"/>
+        <permission name="com.android.permission.INSTALL_EXISTING_PACKAGES"/>
+        <permission name="android.permission.ADJUST_RUNTIME_PERMISSIONS_POLICY"/>
+        <permission name="android.permission.UPDATE_DOMAIN_VERIFICATION_USER_SELECTION"/>
+        <permission name="android.permission.CHANGE_OVERLAY_PACKAGES"/>
+        <permission name="android.permission.DELETE_CACHE_FILES"/>
+        <permission name="android.permission.INTERNAL_DELETE_CACHE_FILES"/>
+        <permission name="android.permission.MANAGE_NOTIFICATION_LISTENERS"/>
+        <permission name="android.permission.NETWORK_SETTINGS"/>
+    </privapp-permissions>
+</permissions>
+EOF
+    
+    # Create module.prop
+    cat > "$am_dir/module.prop" <<EOF
+id=appmanager
+name=App Manager
+version=${APPMANAGER_VERSION}
+versionCode=$(echo "$APPMANAGER_VERSION" | tr -d '.')
+author=MuntashirAkon
+description=App Manager - A full-featured package manager and viewer for Android
+EOF
+    
+    # Create customize.sh for SELinux context
+    cat > "$am_dir/customize.sh" <<'EOF'
+#!/system/bin/sh
+# Set proper SELinux contexts
+chcon -R u:object_r:system_file:s0 "$MODPATH/system/priv-app/AppManager"
+chcon -R u:object_r:system_file:s0 "$MODPATH/system/etc/permissions"
+EOF
+    chmod +x "$am_dir/customize.sh"
+    
+    # Package as zip
+    (cd "$am_dir" && zip -r ../appmanager-module.zip .)
+    printGreen "AppManager module created with privileged permissions"
+  fi
+  
+  printGreen "All privileged app modules created successfully"
+}
+
 function patchOTAs() {
 
   downloadAvBroot
@@ -309,6 +550,12 @@ function patchOTAs() {
     git clone https://github.com/chenxiaolong/my-avbroot-setup .tmp/my-avbroot-setup
     (cd .tmp/my-avbroot-setup && git checkout ${PATCH_PY_COMMIT})
   fi
+  
+  # Download privileged apps
+  downloadPrivilegedApps
+  
+  # Create Magisk modules for privileged apps
+  createPrivilegedAppModules
 
   base642key
 
@@ -342,6 +589,12 @@ function patchOTAs() {
       if [[ "${SKIP_MODULES}" != 'true' ]]; then
         args+=("--module-custota" ".tmp/custota.zip")
         args+=("--module-oemunlockonboot" ".tmp/oemunlockonboot.zip")
+        # New privileged apps
+        args+=("--module" ".tmp/bcr-module.zip")
+        args+=("--module" ".tmp/msd-module.zip")
+        args+=("--module" ".tmp/alterinstaller-module.zip")
+        args+=("--module" ".tmp/bindhosts-module.zip")
+        args+=("--module" ".tmp/appmanager-module.zip")
       fi
       # We create csig and device JSON for OTA later if necessary
       args+=("--skip-custota-tool")
