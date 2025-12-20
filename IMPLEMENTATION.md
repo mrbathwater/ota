@@ -133,12 +133,18 @@ class BindhostsModule(Module):
         system_fs = ext_fs['system']
         with zipfile.ZipFile(self.zip, 'r') as z:
             for path in z.namelist():
-                if path.startswith('system/'):
-                    modules.zip_extract(z, path, system_fs)
+                if path.startswith('system/') and not path.endswith('/'):
+                    # Strip 'system/' prefix since we're already in system partition context
+                    relative_path = path[7:]  # Remove 'system/' (7 chars)
+                    modules.zip_extract(z, path, system_fs, output=relative_path)
 ```
 
+**Key Points**:
 - Extracts all files from the bindhosts Magisk module
-- Places them in the correct system partition locations
+- **Strips `system/` prefix** from paths (7 characters) because `ext_fs['system']` already represents `/system` root
+- Skips directory entries (`not path.endswith('/')`) - only processes actual files
+- Uses `output=relative_path` to specify destination without the `system/` prefix
+- Example: `system/priv-app/bindhosts/app.apk` → extracted to `/system/priv-app/bindhosts/app.apk`
 - Preserves file permissions and SELinux contexts
 
 ### AppManager Module (`appmanager.py`)
@@ -149,13 +155,20 @@ class AppManagerModule(Module):
         system_fs = ext_fs['system']
         with zipfile.ZipFile(self.zip, 'r') as z:
             for path in z.namelist():
-                if path.startswith('system/'):
-                    modules.zip_extract(z, path, system_fs)
+                if path.startswith('system/') and not path.endswith('/'):
+                    # Strip 'system/' prefix since we're already in system partition context
+                    relative_path = path[7:]  # Remove 'system/' (7 chars)
+                    modules.zip_extract(z, path, system_fs, output=relative_path)
 ```
 
+**Key Points**:
 - Extracts our custom-built module containing:
   - `system/priv-app/AppManager/AppManager.apk`
   - `system/etc/permissions/privapp-permissions-appmanager.xml`
+- **Strips `system/` prefix** from paths (7 characters) to avoid creating `/system/system/...`
+- Skips directory entries (`not path.endswith('/')`) - only processes actual files
+- Uses `output=relative_path` parameter to control destination path
+- Example: `system/priv-app/AppManager/AppManager.apk` → extracted to `/system/priv-app/AppManager/AppManager.apk`
 - SELinux contexts applied via module's `customize.sh`
 
 ### AppManager Privileged Permissions
@@ -309,6 +322,25 @@ adb shell dumpsys package io.github.muntashirakon.AppManager | grep permission
 - **Advantage**: Fully automated in CI/CD
 
 ## Troubleshooting
+
+### IsADirectoryError when injecting modules
+
+**Error**: `IsADirectoryError: [Errno 21] Is a directory: '/tmp/.../system/fs_tree/system'`
+
+**Cause**: The module ZIP contains paths like `system/priv-app/...`, but the Python module was trying to extract them directly without stripping the `system/` prefix. Since `ext_fs['system']` already represents the `/system` partition root, this created a conflict trying to create `/system/system/...`.
+
+**Solution**: Updated both `bindhosts.py` and `appmanager.py` generation to:
+1. Strip the `system/` prefix (first 7 characters) from each path
+2. Skip directory entries (only process files)
+3. Use `output=relative_path` parameter in `zip_extract()` to specify the correct destination
+
+**Code pattern**:
+```python
+for path in z.namelist():
+    if path.startswith('system/') and not path.endswith('/'):
+        relative_path = path[7:]  # Strip 'system/' prefix
+        modules.zip_extract(z, path, system_fs, output=relative_path)
+```
 
 ### Missing or empty module files error
 

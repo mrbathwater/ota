@@ -354,8 +354,10 @@ class BindhostsModule(Module):
 
         with zipfile.ZipFile(self.zip, 'r') as z:
             for path in z.namelist():
-                if path.startswith('system/'):
-                    modules.zip_extract(z, path, system_fs)
+                if path.startswith('system/') and not path.endswith('/'):
+                    # Strip 'system/' prefix since we're already in system partition context
+                    relative_path = path[7:]  # Remove 'system/' (7 chars)
+                    modules.zip_extract(z, path, system_fs, output=relative_path)
 EOF
 
   # Create appmanager module
@@ -404,8 +406,10 @@ class AppManagerModule(Module):
 
         with zipfile.ZipFile(self.zip, 'r') as z:
             for path in z.namelist():
-                if path.startswith('system/'):
-                    modules.zip_extract(z, path, system_fs)
+                if path.startswith('system/') and not path.endswith('/'):
+                    # Strip 'system/' prefix since we're already in system partition context
+                    relative_path = path[7:]  # Remove 'system/' (7 chars)
+                    modules.zip_extract(z, path, system_fs, output=relative_path)
 EOF
 
   # Update __init__.py to register the new modules
