@@ -305,6 +305,234 @@ function downloadAndVerifyFromChenxiaolong() {
   fi
 }
 
+function patchModulesLibrary() {
+  print "Patching my-avbroot-setup to add bindhosts and appmanager support..."
+  
+  # Create bindhosts module
+  cat > .tmp/my-avbroot-setup/lib/modules/bindhosts.py <<'EOF'
+# SPDX-FileCopyrightText: 2024-2025 rooted-graphene
+# SPDX-License-Identifier: GPL-3.0-only
+
+from collections.abc import Iterable
+import logging
+from pathlib import Path
+from typing import override
+import zipfile
+
+from lib import modules
+from lib.filesystem import CpioFs, ExtFs
+from lib.modules import Module, ModuleRequirements
+
+
+logger = logging.getLogger(__name__)
+
+
+class BindhostsModule(Module):
+    def __init__(self, zip: Path, sig: Path) -> None:
+        super().__init__()
+        # bindhosts doesn't have signature verification
+        self.zip: Path = zip
+
+    @override
+    def requirements(self) -> ModuleRequirements:
+        return ModuleRequirements(
+            boot_images=set(),
+            ext_images={'system'},
+            selinux_patching=False,
+        )
+
+    @override
+    def inject(
+        self,
+        boot_fs: dict[str, CpioFs],
+        ext_fs: dict[str, ExtFs],
+        sepolicies: Iterable[Path],
+    ) -> None:
+        logger.info(f'Injecting bindhosts: {self.zip}')
+
+        system_fs = ext_fs['system']
+
+        with zipfile.ZipFile(self.zip, 'r') as z:
+            for path in z.namelist():
+                if path.startswith('system/'):
+                    modules.zip_extract(z, path, system_fs)
+EOF
+
+  # Create appmanager module
+  cat > .tmp/my-avbroot-setup/lib/modules/appmanager.py <<'EOF'
+# SPDX-FileCopyrightText: 2024-2025 rooted-graphene
+# SPDX-License-Identifier: GPL-3.0-only
+
+from collections.abc import Iterable
+import logging
+from pathlib import Path, PurePosixPath
+from typing import override
+import zipfile
+
+from lib import modules
+from lib.filesystem import CpioFs, ExtFs
+from lib.modules import Module, ModuleRequirements
+
+
+logger = logging.getLogger(__name__)
+
+
+class AppManagerModule(Module):
+    def __init__(self, zip: Path, sig: Path) -> None:
+        super().__init__()
+        # AppManager doesn't have signature verification
+        self.zip: Path = zip
+
+    @override
+    def requirements(self) -> ModuleRequirements:
+        return ModuleRequirements(
+            boot_images=set(),
+            ext_images={'system'},
+            selinux_patching=False,
+        )
+
+    @override
+    def inject(
+        self,
+        boot_fs: dict[str, CpioFs],
+        ext_fs: dict[str, ExtFs],
+        sepolicies: Iterable[Path],
+    ) -> None:
+        logger.info(f'Injecting AppManager: {self.zip}')
+
+        system_fs = ext_fs['system']
+
+        with zipfile.ZipFile(self.zip, 'r') as z:
+            for path in z.namelist():
+                if path.startswith('system/'):
+                    modules.zip_extract(z, path, system_fs)
+EOF
+
+  # Update __init__.py to register the new modules
+  cat > .tmp/my-avbroot-setup/lib/modules/__init__.py <<'EOF'
+# SPDX-FileCopyrightText: 2024-2025 Andrew Gunnerson
+# SPDX-License-Identifier: GPL-3.0-only
+
+from abc import ABC, abstractmethod
+from collections.abc import Iterable
+import dataclasses
+import logging
+from pathlib import Path, PurePosixPath
+import platform
+import shutil
+import subprocess
+import tempfile
+from typing import Callable
+import zipfile
+
+from lib.filesystem import CpioFs, ExtFs
+
+
+logger = logging.getLogger(__name__)
+
+
+# https://codeberg.org/chenxiaolong/chenxiaolong
+# https://gitlab.com/chenxiaolong/chenxiaolong
+# https://github.com/chenxiaolong/chenxiaolong
+SSH_PUBLIC_KEY_CHENXIAOLONG = \
+    'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDOe6/tBnO7xZhAWXRj3ApUYgn+XZ0wnQiXM8B7tPgv4'
+
+
+def verify_ssh_sig(zip: Path, sig: Path, public_key: str):
+    logger.info(f'Verifying SSH signature: {zip}')
+
+    with tempfile.NamedTemporaryFile(delete_on_close=False) as f_trusted:
+        f_trusted.write(b'trusted ')
+        f_trusted.write(public_key.encode('UTF-8'))
+        f_trusted.close()
+
+        with open(zip, 'rb') as f_zip:
+            subprocess.check_call([
+                'ssh-keygen',
+                '-Y', 'verify',
+                '-f', f_trusted.name,
+                '-I', 'trusted',
+                '-n', 'file',
+                '-s', sig,
+            ], stdin=f_zip)
+
+
+def host_android_abi() -> str:
+    arch = platform.machine()
+
+    if arch == 'x86_64':
+        return arch
+    elif arch == 'i386' or arch == 'i486' or arch == 'i586' or arch == 'i686':
+        return 'x86'
+    elif arch == 'aarch64':
+        return 'arm64-v8a'
+    elif arch.startswith('armv7'):
+        return 'armeabi-v7a'
+    else:
+        raise ValueError(f'Unknown architecture: {arch}')
+
+
+def zip_extract(
+    zip: zipfile.ZipFile,
+    name: str,
+    fs: ExtFs,
+    mode: int = 0o644,
+    parent_mode: int = 0o755,
+    output: str | None = None,
+):
+    path = PurePosixPath(output or name)
+
+    fs.mkdir(path.parent, mode=parent_mode, parents=True, exist_ok=True)
+    with fs.open(path, 'wb', mode=mode) as f_out:
+        with zip.open(name, 'r') as f_in:
+            shutil.copyfileobj(f_in, f_out)
+
+
+@dataclasses.dataclass
+class ModuleRequirements:
+    boot_images: set[str]
+    ext_images: set[str]
+    selinux_patching: bool
+
+
+class Module(ABC):
+    @abstractmethod
+    def requirements(self) -> ModuleRequirements:
+        ...
+
+    @abstractmethod
+    def inject(
+        self,
+        boot_fs: dict[str, CpioFs],
+        ext_fs: dict[str, ExtFs],
+        sepolicies: Iterable[Path],
+    ) -> None:
+        ...
+
+
+def all_modules() -> dict[str, Callable[[Path, Path], Module]]:
+    from lib.modules.alterinstaller import AlterInstallerModule
+    from lib.modules.bcr import BCRModule
+    from lib.modules.custota import CustotaModule
+    from lib.modules.msd import MSDModule
+    from lib.modules.oemunlockonboot import OEMUnlockOnBootModule
+    from lib.modules.bindhosts import BindhostsModule
+    from lib.modules.appmanager import AppManagerModule
+
+    return {
+        'alterinstaller': AlterInstallerModule,
+        'bcr': BCRModule,
+        'custota': CustotaModule,
+        'msd': MSDModule,
+        'oemunlockonboot': OEMUnlockOnBootModule,
+        'bindhosts': BindhostsModule,
+        'appmanager': AppManagerModule,
+    }
+EOF
+
+  printGreen "my-avbroot-setup patched successfully with bindhosts and appmanager support"
+}
+
 function downloadPrivilegedApps() {
   print "Downloading privileged apps..."
   
@@ -469,6 +697,9 @@ function patchOTAs() {
   if ! ls ".tmp/my-avbroot-setup" >/dev/null 2>&1; then
     git clone https://github.com/chenxiaolong/my-avbroot-setup .tmp/my-avbroot-setup
     (cd .tmp/my-avbroot-setup && git checkout ${PATCH_PY_COMMIT})
+    
+    # Patch the modules library to add support for bindhosts and appmanager
+    patchModulesLibrary
   fi
   
   # Download privileged apps
