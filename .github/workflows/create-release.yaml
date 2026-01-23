@@ -18,7 +18,7 @@ jobs:
       - name: Checkout rooted-graphene script repository
         uses: actions/checkout@v5
         with:
-          repository: ota/mrbathwater
+          repository: mrbathwater/ota
           ref: ${{ github.event.inputs.rooted-graphene-version || inputs.rooted-graphene-version || 'main' }}
           fetch-depth: 1 # Efficent checkout, we only need the one ref
       - name: Set inputs
