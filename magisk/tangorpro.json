@@ -1,7 +1,6 @@
 {
   "version": 2,
   "full": {
-    "location_ota": "https://github.com/mrbathwater/ota/releases/download/2026021201/tangorpro-2026021201-496633-magisk-v30.7.zip",
-    "location_csig": "https://github.com/mrbathwater/ota/releases/download/2026021201/tangorpro-2026021201-496633-magisk-v30.7.zip.csig"
+    "location_ota": "https://github.com/mrbathwater/ota/releases/tag/2026021201/tangorpro-2026021201-496633-magisk-v30.7.zip",
+    "location_csig": "https://github.com/mrbathwater/ota/releases/tag/2026021201/tangorpro-2026021201-496633-magisk-v30.7.zip.csig"
   }
-}
