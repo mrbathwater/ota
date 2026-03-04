@@ -27,7 +27,7 @@ GITHUB_REPO=${GITHUB_REPO:-''}
 # If you want an OTA patched with magisk, set the preinit for your device
 MAGISK_PREINIT_DEVICE=${MAGISK_PREINIT_DEVICE:-}
 # Skip creation of rootless OTA by setting to "true"
-SKIP_ROOTLESS=${SKIP_ROOTLESS:-'false'}
+SKIP_ROOTLESS=${SKIP_ROOTLESS:-'true'}
 # https://grapheneos.org/releases#stable-channel
 OTA_VERSION=${OTA_VERSION:-'latest'}
 
