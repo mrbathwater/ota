@@ -204,11 +204,15 @@ jobs:
           git checkout gh-pages
           mkdir -p rootless
           target="rootless/${DEVICE_NAME}.json"
-          if ! grep -q "${GRAPHENEOS_VERSION}" "${target}" 2>/dev/null; then
+          # Publish when the file is missing or its content differs from the freshly
+          # built JSON. Version-presence alone is insufficient: the schnatterer build
+          # may have published this version's rootless JSON before the pixeneos cutover,
+          # and Hail/pixeneos updates change the asset within the same GrapheneOS version.
+          if [ ! -f "${target}" ] || ! cmp -s "/tmp/${DEVICE_NAME}.json" "${target}"; then
             cp "/tmp/${DEVICE_NAME}.json" "${target}"
             git add "${target}"
           else
-            echo "rootless/${DEVICE_NAME}.json already at ${GRAPHENEOS_VERSION}; skipping."
+            echo "rootless/${DEVICE_NAME}.json already up to date; skipping."
           fi
           if ! git diff-index --quiet HEAD; then
             git commit -m "rootless: ${DEVICE_NAME} -> GrapheneOS ${GRAPHENEOS_VERSION} (pixeneos + Hail)"
