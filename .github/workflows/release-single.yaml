@@ -8,6 +8,9 @@ on:
       magisk-preinit-device:
         type: string
         default: ''
+      publish-pages:
+        type: string
+        default: 'true'
   
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -47,6 +50,9 @@ on:
       additional-env:
         description: Additional env var key value pairs, space separated, e.g. "A=1 B=2"
         default: ''
+      publish-pages:
+        description: Commit rootless device JSON to gh-pages (set false for test builds)
+        default: 'true'
 jobs:
   build-device:
     runs-on: ubuntu-latest
@@ -74,7 +80,9 @@ jobs:
           echo "FORCE_OTA_SERVER_UPLOAD=$(echo '${{ github.event.inputs.force-ota-server-upload || '' }}' | xargs)" >> $GITHUB_ENV
           echo "FORCE_BUILD=$(echo '${{ github.event.inputs.force-build || '' }}' | xargs)" >> $GITHUB_ENV
           echo "UPLOAD_TEST_OTA=$(echo '${{ github.event.inputs.upload-test-ota || '' }}' | xargs)" >> $GITHUB_ENV
-          echo "SKIP_ROOTLESS=$(echo '${{ github.event.inputs.skip-rootless || '' }}' | xargs)" >> $GITHUB_ENV
+          # Rootless is now built by the pixeneos engine in the build-rootless job below.
+          # Force the schnatterer build to magisk-only so it does not also publish rootless/<device>.json.
+          echo "SKIP_ROOTLESS=true" >> $GITHUB_ENV
           echo "SKIP_RELEASE=$(echo '${{ github.event.inputs.skip-release || '' }}' | xargs)" >> $GITHUB_ENV
           
           if [[ "${{ github.event_name }}" == "push" ]]  || [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -104,4 +112,108 @@ jobs:
             DEBUG=1 bash -c '. rooted-ota.sh && createRootedOta && createOtaServerData'
           else
             DEBUG=1 bash -c '. rooted-ota.sh && createAndReleaseRootedOta'
+          fi
+  build-rootless:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout OTA repository (release assets + GitHub Pages)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Allow switching to the gh-pages branch
+
+      - name: Checkout pixeneos build engine
+        uses: actions/checkout@v4
+        with:
+          repository: mrbathwater/pixeneos
+          ref: main
+          path: pixeneos
+          fetch-depth: 1
+
+      - name: Resolve inputs
+        run: |
+          echo "DEVICE_NAME=$(echo '${{ github.event.inputs.device-id || inputs.device-id || 'shiba' }}' | xargs)" >> $GITHUB_ENV
+          echo "PUBLISH_PAGES=$(echo '${{ github.event.inputs.publish-pages || inputs.publish-pages || 'true' }}' | xargs)" >> $GITHUB_ENV
+
+      - run: sudo apt-get update && sudo apt-get install -y jq curl git unzip xxd zip
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build rootless OTA with pixeneos (+ Hail)
+        shell: bash
+        working-directory: pixeneos
+        env:
+          INTERACTIVE_MODE: false
+          CLEANUP: true
+          DEVICE_NAME: ${{ env.DEVICE_NAME }}
+          GRAPHENEOS_UPDATE_CHANNEL: stable-security-preview
+          ADDITIONALS_ROOT: false
+          PASSPHRASE_AVB: ${{ secrets.PASSPHRASE_AVB }}
+          PASSPHRASE_OTA: ${{ secrets.PASSPHRASE_OTA }}
+          KEYS_AVB_BASE64: ${{ secrets.KEY_AVB_BASE64 }}
+          KEYS_OTA_BASE64: ${{ secrets.KEY_OTA_BASE64 }}
+          KEYS_CERT_OTA_BASE64: ${{ secrets.CERT_OTA_BASE64 }}
+        run: |
+          set -euo pipefail
+          # Build only (download deps + patch + sign + csig + device JSON).
+          # Publishing is done by this repo in the next steps.
+          . src/main.sh
+          echo "OUTPUTS_PATCHED_OTA=${OUTPUTS[PATCHED_OTA]}" >> "$GITHUB_ENV"
+          echo "GRAPHENEOS_VERSION=${VERSION[GRAPHENEOS]}" >> "$GITHUB_ENV"
+
+      - name: Upload build artifacts (for inspection)
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootless-${{ env.DEVICE_NAME }}
+          path: |
+            pixeneos/${{ env.OUTPUTS_PATCHED_OTA }}.csig
+            pixeneos/${{ env.DEVICE_NAME }}.json
+
+      - name: Upload OTA + csig to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          asset="pixeneos/${OUTPUTS_PATCHED_OTA}"
+          # The magisk job runs in parallel and may not have created this
+          # version's release yet (versions can differ per device), so create
+          # it if missing. `|| true` tolerates a concurrent create race.
+          if ! gh release view "${GRAPHENEOS_VERSION}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create "${GRAPHENEOS_VERSION}" --repo "${{ github.repository }}" \
+              --title "${GRAPHENEOS_VERSION}" \
+              --notes "Update to [GrapheneOS ${GRAPHENEOS_VERSION}](https://grapheneos.org/releases#${GRAPHENEOS_VERSION})." || true
+          fi
+          gh release upload "${GRAPHENEOS_VERSION}" \
+            "${asset}" "${asset}.csig" \
+            --repo "${{ github.repository }}" --clobber
+
+      - name: Publish device JSON to gh-pages/rootless
+        if: env.PUBLISH_PAGES != 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "pixeneos/${DEVICE_NAME}.json" "/tmp/${DEVICE_NAME}.json"
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git checkout gh-pages
+          mkdir -p rootless
+          target="rootless/${DEVICE_NAME}.json"
+          if ! grep -q "${GRAPHENEOS_VERSION}" "${target}" 2>/dev/null; then
+            cp "/tmp/${DEVICE_NAME}.json" "${target}"
+            git add "${target}"
+          else
+            echo "rootless/${DEVICE_NAME}.json already at ${GRAPHENEOS_VERSION}; skipping."
+          fi
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "rootless: ${DEVICE_NAME} -> GrapheneOS ${GRAPHENEOS_VERSION} (pixeneos + Hail)"
+            for i in $(seq 1 10); do
+              git pull --rebase origin gh-pages && git push origin gh-pages && break
+              echo "retry $i"; sleep 2
+            done
           fi
