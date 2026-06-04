@@ -1,7 +1,7 @@
 {
   "version": 2,
   "full": {
-    "location_ota": "https://github.com/mrbathwater/ota/releases/download/2026052401/tangorpro-2026052401-rootless-39b9171.zip",
-    "location_csig": "https://github.com/mrbathwater/ota/releases/download/2026052401/tangorpro-2026052401-rootless-39b9171.zip.csig"
+    "location_ota": "https://github.com/mrbathwater/ota/releases/download/2026060101/tangorpro-2026060101-rootless-39b9171.zip",
+    "location_csig": "https://github.com/mrbathwater/ota/releases/download/2026060101/tangorpro-2026060101-rootless-39b9171.zip.csig"
   }
 }
