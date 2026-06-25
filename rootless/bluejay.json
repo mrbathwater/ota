@@ -1,7 +1,7 @@
 {
   "version": 2,
   "full": {
-    "location_ota": "https://github.com/mrbathwater/ota/releases/download/2026061601/bluejay-2026061601-rootless-39b9171.zip",
-    "location_csig": "https://github.com/mrbathwater/ota/releases/download/2026061601/bluejay-2026061601-rootless-39b9171.zip.csig"
+    "location_ota": "https://github.com/mrbathwater/ota/releases/download/2026062301/bluejay-2026062301-rootless-39b9171.zip",
+    "location_csig": "https://github.com/mrbathwater/ota/releases/download/2026062301/bluejay-2026062301-rootless-39b9171.zip.csig"
   }
 }
