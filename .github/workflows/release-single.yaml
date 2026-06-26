@@ -144,7 +144,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build rootless OTA with pixeneos (+ Hail)
+      - name: Build rootless OTA with pixeneos (+ Hail + App Manager)
         shell: bash
         working-directory: pixeneos
         env:
@@ -215,7 +215,7 @@ jobs:
             echo "rootless/${DEVICE_NAME}.json already up to date; skipping."
           fi
           if ! git diff-index --quiet HEAD; then
-            git commit -m "rootless: ${DEVICE_NAME} -> GrapheneOS ${GRAPHENEOS_VERSION} (pixeneos + Hail)"
+            git commit -m "rootless: ${DEVICE_NAME} -> GrapheneOS ${GRAPHENEOS_VERSION} (pixeneos + Hail + App Manager)"
             for i in $(seq 1 10); do
               git pull --rebase origin gh-pages && git push origin gh-pages && break
               echo "retry $i"; sleep 2
