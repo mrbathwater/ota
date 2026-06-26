@@ -1,7 +1,7 @@
 {
   "version": 2,
   "full": {
-    "location_ota": "https://github.com/mrbathwater/ota/releases/download/2026062301/tokay-2026062301-rootless-39b9171.zip",
-    "location_csig": "https://github.com/mrbathwater/ota/releases/download/2026062301/tokay-2026062301-rootless-39b9171.zip.csig"
+    "location_ota": "https://github.com/mrbathwater/ota/releases/download/2026062301/tokay-2026062301-rootless-2d33480.zip",
+    "location_csig": "https://github.com/mrbathwater/ota/releases/download/2026062301/tokay-2026062301-rootless-2d33480.zip.csig"
   }
 }
