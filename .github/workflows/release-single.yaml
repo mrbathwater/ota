@@ -1,6 +1,12 @@
 name: Release single device
 
 on:
+  # Test build (signs but neither releases nor publishes) when the pipeline itself changes
+  pull_request:
+    paths:
+      - .github/workflows/release-single.yaml
+      - rooted-ota.sh
+
   workflow_call:
     inputs:
       device-id:
@@ -87,7 +93,9 @@ jobs:
           echo "SKIP_RELEASE=$(echo '${{ github.event.inputs.skip-release || '' }}' | xargs)" >> $GITHUB_ENV
           
           if [[ "${{ github.event_name }}" == "push" ]]  || [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "Running on push: Simple build without release for device $DEVICE_ID"
+            echo "Running on push/PR: Simple build without release for test device bluejay"
+            echo "DEVICE_ID=bluejay" >> $GITHUB_ENV
+            echo "MAGISK_PREINIT_DEVICE=sda8" >> $GITHUB_ENV
             echo "FORCE_BUILD=true" >> $GITHUB_ENV
             echo "SKIP_RELEASE=true" >> $GITHUB_ENV
           fi
@@ -126,19 +134,36 @@ jobs:
         with:
           fetch-depth: 0 # Allow switching to the gh-pages branch
 
-      - name: Checkout pixeneos build engine
-        uses: actions/checkout@v4
-        with:
-          repository: mrbathwater/pixeneos
-          ref: ${{ github.event.inputs.pixeneos-version || inputs.pixeneos-version || 'main' }}
-          path: pixeneos
-          fetch-depth: 1
-
       - name: Resolve inputs
         run: |
           echo "DEVICE_NAME=$(echo '${{ github.event.inputs.device-id || inputs.device-id || 'shiba' }}' | xargs)" >> $GITHUB_ENV
           echo "PUBLISH_PAGES=$(echo '${{ github.event.inputs.publish-pages || inputs.publish-pages || 'true' }}' | xargs)" >> $GITHUB_ENV
           echo "SKIP_RELEASE=$(echo '${{ github.event.inputs.skip-release || '' }}' | xargs)" >> $GITHUB_ENV
+
+          # Which pixeneos ref to build with: explicit input first. On PR test
+          # builds, fall back to a same-named companion branch in the pixeneos
+          # repo if one exists, then to main.
+          ref="$(echo '${{ github.event.inputs.pixeneos-version || inputs.pixeneos-version || '' }}' | xargs)"
+          if [[ -z "${ref}" && "${{ github.event_name }}" == "pull_request" ]]; then
+            if git ls-remote --exit-code --heads https://github.com/mrbathwater/pixeneos '${{ github.head_ref }}' >/dev/null 2>&1; then
+              ref='${{ github.head_ref }}'
+            fi
+          fi
+          echo "PIXENEOS_REF=${ref:-main}" >> $GITHUB_ENV
+
+          if [[ "${{ github.event_name }}" == "push" ]] || [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "Running on push/PR: Test build without release/publish for test device bluejay"
+            echo "DEVICE_NAME=bluejay" >> $GITHUB_ENV
+            echo "SKIP_RELEASE=true" >> $GITHUB_ENV
+          fi
+
+      - name: Checkout pixeneos build engine
+        uses: actions/checkout@v4
+        with:
+          repository: mrbathwater/pixeneos
+          ref: ${{ env.PIXENEOS_REF }}
+          path: pixeneos
+          fetch-depth: 1
 
       - run: sudo apt-get update && sudo apt-get install -y jq curl git unzip xxd zip
 
