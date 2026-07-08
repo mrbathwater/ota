@@ -1,6 +1,12 @@
 name: Release single device
 
 on:
+  # Test build (signs but neither releases nor publishes) when the pipeline itself changes
+  pull_request:
+    paths:
+      - .github/workflows/release-single.yaml
+      - rooted-ota.sh
+
   workflow_call:
     inputs:
       device-id:
@@ -11,7 +17,10 @@ on:
       publish-pages:
         type: string
         default: 'true'
-  
+      pixeneos-version:
+        type: string
+        default: 'main'
+
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
     inputs:
@@ -41,8 +50,8 @@ on:
         description: Skip release (build only)
         required: false
         type: boolean
-      rooted-graphene-version:
-        description: Git ref of rooted graphene repo to use
+      pixeneos-version:
+        description: Git ref of the pixeneos repo to use for the rootless build
         required: false
       ota-version:
         description: OTA version
@@ -58,11 +67,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20 # Make sure to not waste hours when some command does not return 
     steps:
-      - name: Checkout rooted-graphene script repository
+      - name: Checkout this repository (rooted-ota.sh)
         uses: actions/checkout@v4
         with:
-          repository: schnatterer/rooted-graphene
-          ref: ${{ github.event.inputs.rooted-graphene-version || inputs.rooted-graphene-version || 'main' }} 
           fetch-depth: 1 # Efficent checkout, we only need the one ref
       - name: Checkout OTA repository for updating OTA server on GitHub Pages
         uses: actions/checkout@v4
@@ -80,13 +87,15 @@ jobs:
           echo "FORCE_OTA_SERVER_UPLOAD=$(echo '${{ github.event.inputs.force-ota-server-upload || '' }}' | xargs)" >> $GITHUB_ENV
           echo "FORCE_BUILD=$(echo '${{ github.event.inputs.force-build || '' }}' | xargs)" >> $GITHUB_ENV
           echo "UPLOAD_TEST_OTA=$(echo '${{ github.event.inputs.upload-test-ota || '' }}' | xargs)" >> $GITHUB_ENV
-          # Rootless is now built by the pixeneos engine in the build-rootless job below.
-          # Force the schnatterer build to magisk-only so it does not also publish rootless/<device>.json.
+          # Rootless is built by the pixeneos engine in the build-rootless job below.
+          # Force the rooted-ota.sh build to magisk-only so it does not also publish rootless/<device>.json.
           echo "SKIP_ROOTLESS=true" >> $GITHUB_ENV
           echo "SKIP_RELEASE=$(echo '${{ github.event.inputs.skip-release || '' }}' | xargs)" >> $GITHUB_ENV
           
           if [[ "${{ github.event_name }}" == "push" ]]  || [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "Running on push: Simple build without release for device $DEVICE_ID"
+            echo "Running on push/PR: Simple build without release for test device bluejay"
+            echo "DEVICE_ID=bluejay" >> $GITHUB_ENV
+            echo "MAGISK_PREINIT_DEVICE=sda8" >> $GITHUB_ENV
             echo "FORCE_BUILD=true" >> $GITHUB_ENV
             echo "SKIP_RELEASE=true" >> $GITHUB_ENV
           fi
@@ -114,6 +123,7 @@ jobs:
             DEBUG=1 bash -c '. rooted-ota.sh && createAndReleaseRootedOta'
           fi
   build-rootless:
+    if: github.event.inputs.skip-rootless != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -124,18 +134,36 @@ jobs:
         with:
           fetch-depth: 0 # Allow switching to the gh-pages branch
 
-      - name: Checkout pixeneos build engine
-        uses: actions/checkout@v4
-        with:
-          repository: mrbathwater/pixeneos
-          ref: main
-          path: pixeneos
-          fetch-depth: 1
-
       - name: Resolve inputs
         run: |
           echo "DEVICE_NAME=$(echo '${{ github.event.inputs.device-id || inputs.device-id || 'shiba' }}' | xargs)" >> $GITHUB_ENV
           echo "PUBLISH_PAGES=$(echo '${{ github.event.inputs.publish-pages || inputs.publish-pages || 'true' }}' | xargs)" >> $GITHUB_ENV
+          echo "SKIP_RELEASE=$(echo '${{ github.event.inputs.skip-release || '' }}' | xargs)" >> $GITHUB_ENV
+
+          # Which pixeneos ref to build with: explicit input first. On PR test
+          # builds, fall back to a same-named companion branch in the pixeneos
+          # repo if one exists, then to main.
+          ref="$(echo '${{ github.event.inputs.pixeneos-version || inputs.pixeneos-version || '' }}' | xargs)"
+          if [[ -z "${ref}" && "${{ github.event_name }}" == "pull_request" ]]; then
+            if git ls-remote --exit-code --heads https://github.com/mrbathwater/pixeneos '${{ github.head_ref }}' >/dev/null 2>&1; then
+              ref='${{ github.head_ref }}'
+            fi
+          fi
+          echo "PIXENEOS_REF=${ref:-main}" >> $GITHUB_ENV
+
+          if [[ "${{ github.event_name }}" == "push" ]] || [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "Running on push/PR: Test build without release/publish for test device bluejay"
+            echo "DEVICE_NAME=bluejay" >> $GITHUB_ENV
+            echo "SKIP_RELEASE=true" >> $GITHUB_ENV
+          fi
+
+      - name: Checkout pixeneos build engine
+        uses: actions/checkout@v4
+        with:
+          repository: mrbathwater/pixeneos
+          ref: ${{ env.PIXENEOS_REF }}
+          path: pixeneos
+          fetch-depth: 1
 
       - run: sudo apt-get update && sudo apt-get install -y jq curl git unzip xxd zip
 
@@ -144,7 +172,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Build rootless OTA with pixeneos (+ Hail + App Manager)
+      - name: Build rootless OTA with pixeneos
         shell: bash
         working-directory: pixeneos
         env:
@@ -175,6 +203,7 @@ jobs:
             pixeneos/${{ env.DEVICE_NAME }}.json
 
       - name: Upload OTA + csig to the release
+        if: env.SKIP_RELEASE != 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -194,7 +223,7 @@ jobs:
             --repo "${{ github.repository }}" --clobber
 
       - name: Publish device JSON to gh-pages/rootless
-        if: env.PUBLISH_PAGES != 'false'
+        if: env.PUBLISH_PAGES != 'false' && env.SKIP_RELEASE != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -205,9 +234,8 @@ jobs:
           mkdir -p rootless
           target="rootless/${DEVICE_NAME}.json"
           # Publish when the file is missing or its content differs from the freshly
-          # built JSON. Version-presence alone is insufficient: the schnatterer build
-          # may have published this version's rootless JSON before the pixeneos cutover,
-          # and Hail/pixeneos updates change the asset within the same GrapheneOS version.
+          # built JSON. Version-presence alone is insufficient: pixeneos updates can
+          # change the asset within the same GrapheneOS version.
           if [ ! -f "${target}" ] || ! cmp -s "/tmp/${DEVICE_NAME}.json" "${target}"; then
             cp "/tmp/${DEVICE_NAME}.json" "${target}"
             git add "${target}"
@@ -215,7 +243,7 @@ jobs:
             echo "rootless/${DEVICE_NAME}.json already up to date; skipping."
           fi
           if ! git diff-index --quiet HEAD; then
-            git commit -m "rootless: ${DEVICE_NAME} -> GrapheneOS ${GRAPHENEOS_VERSION} (pixeneos + Hail + App Manager)"
+            git commit -m "rootless: ${DEVICE_NAME} -> GrapheneOS ${GRAPHENEOS_VERSION} (pixeneos)"
             for i in $(seq 1 10); do
               git pull --rebase origin gh-pages && git push origin gh-pages && break
               echo "retry $i"; sleep 2
