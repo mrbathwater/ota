@@ -26,7 +26,9 @@ jobs:
           - device-id: tokay # Pixel 9
             magisk-preinit-device: sda10
           - device-id: bluejay # Pixel 6a
-            magisk-preinit-device: sda8      
+            magisk-preinit-device: sda8
+          - device-id: panther # Pixel 7
+            magisk-preinit-device: sda8 
     uses: ./.github/workflows/release-single.yaml
     secrets: inherit 
     with:
