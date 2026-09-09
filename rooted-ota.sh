@@ -70,8 +70,10 @@ OTA_BASE_URL="https://releases.grapheneos.org"
 AVB_ROOT_VERSION=3.34.1
 # renovate: datasource=github-releases packageName=chenxiaolong/Custota versioning=semver-coerced
 CUSTOTA_VERSION=6.5
+# Must be kept in sync with AFSR_VERSION: afsr 2.0.0 changed the TOML written by "afsr unpack",
+# which patch.py only understands from commit 9161b3e ("Add support for afsr 2.0.0") onwards.
 # renovate: datasource=git-refs packageName=https://github.com/chenxiaolong/my-avbroot-setup currentValue=master
-PATCH_PY_COMMIT=84139189c8cbe244a676582a3b3517f31fabc421
+PATCH_PY_COMMIT=9161b3e13416790d7e6da21d9dac5a14bc724504
 # renovate: datasource=docker packageName=python
 PYTHON_VERSION=3.14.7-alpine
 # renovate: datasource=github-releases packageName=chenxiaolong/OEMUnlockOnBoot versioning=semver-coerced
@@ -349,14 +351,17 @@ function patchOTAs() {
       # We need to add .tmp to PATH, but we can't use $PATH: because this would be the PATH of the host not the container
       # Python image is designed to run as root, so chown the files it creates back at the end
       # ... room for improvement
+      # my-avbroot-setup declares its python dependencies in pyproject.toml + uv.lock (no more requirements.txt),
+      # so run patch.py via uv, which installs exactly the locked versions into .tmp/my-avbroot-setup/.venv.
+      # --project only selects the pyproject/lock to use; relative paths in ${args} still resolve against /app.
       # shellcheck disable=SC2046
       docker run --rm -i $(tty &>/dev/null && echo '-t') -v "$PWD:/app"  -w /app \
         -e PATH='/bin:/usr/local/bin:/sbin:/usr/bin/:/app/.tmp' \
         --env-file <(env) \
         python:${PYTHON_VERSION} sh -c \
           "apk add openssh && \
-           pip install -r .tmp/my-avbroot-setup/requirements.txt && \
-           python .tmp/my-avbroot-setup/patch.py ${args[*]} ; result=\$?; \
+           pip install uv && \
+           uv run --locked --project .tmp/my-avbroot-setup .tmp/my-avbroot-setup/patch.py ${args[*]} ; result=\$?; \
            chown -R $(id -u):$(id -g) .tmp; exit \$result"
     
        printGreen "Finished patching file ${targetFile}"
