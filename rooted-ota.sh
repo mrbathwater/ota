@@ -538,13 +538,19 @@ function uploadOtaServerData() {
       # update only, if current $DEVICE_ID.json does not contain $OTA_VERSION
       # We don't want to trigger users to upgrade on new commits from this repo or new magisk versions
       # They can manually upgrade by downloading the OTAs from the releases and "adb sideload" them
-      if ! grep -q "$OTA_VERSION" "${targetFile}" || [[ "$FORCE_OTA_SERVER_UPLOAD" == 'true' ]] && [[ "$SKIP_OTA_SERVER_UPLOAD" != 'true' ]]; then
+      # Exception: if the asset the JSON currently points to is gone from the release (e.g. release deleted and
+      # recreated, assets renamed), Custota fails with FileNotFoundException, so re-point it to the asset just uploaded.
+      if [[ "$SKIP_OTA_SERVER_UPLOAD" == 'true' ]]; then
+        printGreen "Skipping update of OTA server, because SKIP_OTA_SERVER_UPLOAD is true."
+      elif [[ ! -f "${targetFile}" ]] || ! grep -q "$OTA_VERSION" "${targetFile}" || [[ "$FORCE_OTA_SERVER_UPLOAD" == 'true' ]]; then
         cp "${base_dir}/.tmp/${flavor}/$DEVICE_ID.json" "${targetFile}"
         git add "${targetFile}"
-      elif grep -q "${OTA_VERSION}" "${targetFile}"; then
-        printGreen "Skipping update of OTA server, because ${OTA_VERSION} already in ${folderPrefix}${flavor}/${DEVICE_ID}.json and FORCE_OTA_SERVER_UPLOAD is false."
+      elif otaServerAssetMissing "${targetFile}"; then
+        printGreen "Updating OTA server, because the asset referenced in ${folderPrefix}${flavor}/${DEVICE_ID}.json no longer exists on release ${OTA_VERSION}."
+        cp "${base_dir}/.tmp/${flavor}/$DEVICE_ID.json" "${targetFile}"
+        git add "${targetFile}"
       else
-        printGreen "Skipping update of OTA server, because SKIP_OTA_SERVER_UPLOAD is true."
+        printGreen "Skipping update of OTA server, because ${OTA_VERSION} already in ${folderPrefix}${flavor}/${DEVICE_ID}.json and FORCE_OTA_SERVER_UPLOAD is false."
       fi
     done
     
@@ -560,6 +566,35 @@ function uploadOtaServerData() {
     # Switch back to the original branch
     git checkout "$current_branch"
   )
+}
+
+# Returns 0 (true) if the OTA referenced by the given device JSON is not (or no longer) an asset of the current release
+function otaServerAssetMissing() {
+  local jsonFile="$1"
+  local referencedAsset releaseAssets
+
+  referencedAsset=$(jq -r '.full.location_ota // empty' "${jsonFile}" 2>/dev/null | sed 's|.*/||')
+  if [[ -z "${referencedAsset}" ]]; then
+    # Unparseable JSON or no location: treat as missing so it gets rewritten
+    return 0
+  fi
+
+  if [[ -z "${RELEASE_ID}" ]] || [[ -z "${GITHUB_REPO}" ]]; then
+    # Without a release to check against, keep the existing behaviour (no rewrite)
+    return 1
+  fi
+
+  local params=("-H" "Accept: application/vnd.github.v3+json")
+  if [[ -n "${GITHUB_TOKEN}" ]]; then
+    params+=("-H" "Authorization: token ${GITHUB_TOKEN}")
+  fi
+  if ! releaseAssets=$(curl --fail -sL "${params[@]}" \
+      "https://api.github.com/repos/${GITHUB_REPO}/releases/${RELEASE_ID}/assets?per_page=100" | jq -r '.[].name'); then
+    printRed "Could not list assets of release ${RELEASE_ID}; leaving ${jsonFile} untouched."
+    return 1
+  fi
+
+  ! grep -qxF "${referencedAsset}" <<< "${releaseAssets}"
 }
 
 extractGithubRepo() {
