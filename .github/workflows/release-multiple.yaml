@@ -5,6 +5,16 @@ on:
   schedule:
     - cron:  '0 3 * * *'
 
+  # Build right away when the pipeline itself changes on main (e.g. a magisk/avbroot bump), instead of waiting for
+  # the schedule. Each device checks its own assets, so this also fills a release that exists but is missing assets,
+  # and is a no-op for devices whose assets for the latest version are already released.
+  push:
+    branches:
+      - main
+    paths:
+      - rooted-ota.sh
+      - .github/workflows/**
+
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
