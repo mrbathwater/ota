@@ -3,6 +3,15 @@ name: Create release
 on:
   schedule:
     - cron: '0 */2 * * *'
+  # Also check right away when the pipeline itself changes on main (e.g. a magisk/avbroot bump), so a release
+  # that is missing for the latest GrapheneOS version gets built without waiting for the schedule.
+  # No-op when the release for the latest version already exists.
+  push:
+    branches:
+      - main
+    paths:
+      - rooted-ota.sh
+      - .github/workflows/**
    # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
     inputs:
