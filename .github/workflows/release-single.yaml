@@ -14,6 +14,10 @@ on:
       magisk-preinit-device:
         type: string
         default: ''
+      rootless:
+        description: Also build and publish a rootless OTA ('true'/'false')
+        type: string
+        default: 'false'
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -24,6 +28,10 @@ on:
       magisk-preinit-device:
         description: Magisk preinit device
         required: false
+      rootless:
+        description: Also build and publish a rootless OTA (signed with the same keys)
+        required: false
+        type: boolean
       upload-test-ota:
         description: Upload OTA to test folder
         required: false
@@ -49,7 +57,7 @@ on:
 jobs:
   build-device:
     runs-on: ubuntu-latest
-    timeout-minutes: 20 # Make sure to not waste hours when some command does not return
+    timeout-minutes: 35 # Make sure to not waste hours when some command does not return. Two flavors take ~2x as long.
     steps:
       - name: Checkout this repository (rooted-ota.sh)
         uses: actions/checkout@v4
@@ -71,16 +79,21 @@ jobs:
           echo "FORCE_OTA_SERVER_UPLOAD=$(echo '${{ github.event.inputs.force-ota-server-upload || '' }}' | xargs)" >> $GITHUB_ENV
           echo "FORCE_BUILD=$(echo '${{ github.event.inputs.force-build || '' }}' | xargs)" >> $GITHUB_ENV
           echo "UPLOAD_TEST_OTA=$(echo '${{ github.event.inputs.upload-test-ota || '' }}' | xargs)" >> $GITHUB_ENV
-          # Only the magisk (rooted) flavor is built and published automatically.
-          # Rootless OTAs are never built by this pipeline; the rootless flavor in rooted-ota.sh stays opt-in
-          # (SKIP_ROOTLESS=false via additional-env) for manual runs only.
-          echo "SKIP_ROOTLESS=true" >> $GITHUB_ENV
+          # The magisk (rooted) flavor is always built when MAGISK_PREINIT_DEVICE is set.
+          # The rootless flavor (rooted-ota.sh, signed with the same keys, published to rootless/<device>.json)
+          # is only built for devices that opt in via the "rootless" input (see release-multiple.yaml).
+          if [[ "$(echo '${{ github.event.inputs.rootless || inputs.rootless || 'false' }}' | xargs)" == 'true' ]]; then
+            echo "SKIP_ROOTLESS=false" >> $GITHUB_ENV
+          else
+            echo "SKIP_ROOTLESS=true" >> $GITHUB_ENV
+          fi
           echo "SKIP_RELEASE=$(echo '${{ github.event.inputs.skip-release || '' }}' | xargs)" >> $GITHUB_ENV
 
           if [[ "${{ github.event_name }}" == "push" ]]  || [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "Running on push/PR: Simple build without release for test device bluejay"
+            echo "Running on push/PR: Build both flavors without release for test device bluejay"
             echo "DEVICE_ID=bluejay" >> $GITHUB_ENV
             echo "MAGISK_PREINIT_DEVICE=sda8" >> $GITHUB_ENV
+            echo "SKIP_ROOTLESS=false" >> $GITHUB_ENV
             echo "FORCE_BUILD=true" >> $GITHUB_ENV
             echo "SKIP_RELEASE=true" >> $GITHUB_ENV
           fi

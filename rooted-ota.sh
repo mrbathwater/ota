@@ -36,7 +36,7 @@ OTA_VERSION=${OTA_VERSION:-'latest'}
 # Find latest magisk version here: https://github.com/topjohnwu/Magisk/releases, or:
 # curl --fail -sL -I -o /dev/null -w '%{url_effective}' https://github.com/topjohnwu/Magisk/releases/latest | sed 's/.*\/tag\///;'
 # renovate: datasource=github-releases packageName=topjohnwu/Magisk versioning=semver-coerced
-DEFAULT_MAGISK_VERSION=v31.0
+DEFAULT_MAGISK_VERSION=v31.1
 MAGISK_VERSION=${MAGISK_VERSION:-${DEFAULT_MAGISK_VERSION}}
 
 SKIP_CLEANUP=${SKIP_CLEANUP:-''}
@@ -66,16 +66,17 @@ OTA_CHANNEL=${OTA_CHANNEL:-stable-security-preview} # Alternative: 'stable' or '
 NO_COLOR=${NO_COLOR:-''}
 OTA_BASE_URL="https://releases.grapheneos.org"
 
+# Must support DEFAULT_MAGISK_VERSION: Magisk v31.1 (version code 31100) needs avbroot >= 3.37.1
 # renovate: datasource=github-releases packageName=chenxiaolong/avbroot versioning=semver
-AVB_ROOT_VERSION=3.34.1
+AVB_ROOT_VERSION=3.37.1
 # renovate: datasource=github-releases packageName=chenxiaolong/Custota versioning=semver-coerced
-CUSTOTA_VERSION=6.5
+CUSTOTA_VERSION=6.8
 # Must be kept in sync with AFSR_VERSION: afsr 2.0.0 changed the TOML written by "afsr unpack",
-# which patch.py only understands from commit 9161b3e ("Add support for afsr 2.0.0") onwards.
+# which patch.py only understands from commit 9161b3e ("Add support for afsr 2.0.0") or later.
 # renovate: datasource=git-refs packageName=https://github.com/chenxiaolong/my-avbroot-setup currentValue=master
-PATCH_PY_COMMIT=9161b3e13416790d7e6da21d9dac5a14bc724504
+PATCH_PY_COMMIT=4c7d09c0eda8cb03c859d8315ea748e1978a8a35
 # renovate: datasource=docker packageName=python
-PYTHON_VERSION=3.14.7-alpine
+PYTHON_VERSION=3.14.8-alpine
 # renovate: datasource=github-releases packageName=chenxiaolong/OEMUnlockOnBoot versioning=semver-coerced
 OEMUNLOCKONBOOT_VERSION=1.4
 # renovate: datasource=github-releases packageName=chenxiaolong/afsr versioning=semver
