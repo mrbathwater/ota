@@ -25,6 +25,7 @@ jobs:
             magisk-preinit-device: sda5
           - device-id: tokay # Pixel 9
             magisk-preinit-device: sda10
+            rootless: 'true' # Also build + publish a rootless OTA (signed with the same keys), tokay only
           - device-id: bluejay # Pixel 6a
             magisk-preinit-device: sda8
           - device-id: panther # Pixel 7
@@ -34,3 +35,4 @@ jobs:
     with:
       device-id: ${{ matrix.device-id }}
       magisk-preinit-device: ${{ matrix.magisk-preinit-device }}
+      rootless: ${{ matrix.rootless || 'false' }}
